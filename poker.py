@@ -1,129 +1,37 @@
-from enum import Enum
+from player import *
 from typing import List, Tuple
-import random
-
-
-class Rank(Enum):
-    ACE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, TEN, JACK, QUEEN, KING = range(13)
-
-class Suit(Enum):
-    SPADES, HEARTS, DIAMONDS, CLUBS = range(4)
-
-
-class Card:
-    def __init__(self, rank: Rank, suit: Suit):
-        self.rank = rank
-        self.suit = suit
-
-    def __eq__(self, other):
-        if type(other) == int:
-            return self.rank.value == other
-        elif type(other) == Rank:
-            return self.rank == other
-        elif type(other) == Card:
-            return self.rank == other.rank
-        else:
-            raise TypeError("Cannot compare Card and " + str(type(other)))
-
-    def __ne__(self, other):
-        return self.rank != other.rank
-
-    def __lt__(self, other):
-        if self.rank == Rank.ACE and other.rank != Rank.ACE:
-            return False
-        elif self.rank != Rank.ACE and other.rank == Rank.ACE:
-            return True
-        return self.rank.value < other.rank.value
-    
-    def __gt__(self, other):
-        if self.rank == Rank.ACE and other.rank != Rank.ACE:
-            return True
-        elif self.rank != Rank.ACE and other.rank == Rank.ACE:
-            return False
-        return self.rank.value > other.rank.value
-
-    def __add__(self, other):
-        if type(other) == int:
-            new_rank = self.rank.value + other
-        elif type(other) == Rank:
-            new_rank = self.rank.value + other.value
-        elif type(other) == Card:
-            new_rank = self.rank.value + other.rank.value
-        else:
-            raise TypeError("Cannot add Card and " + str(type(other)))
-        
-        if new_rank > 12:
-            new_rank -= 13
-        return Rank(new_rank)
-
-    def __str__(self):
-        suits = ["♠️", "♥️", "♦️", "♣️"]
-        ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
-        colors = ['\033[30m', '\033[31m', '\033[34m','\033[32m', '\033[0m']
-        
-        # returns colored card based on suit (black for spades and clubs, red for hearts and diamonds)
-        return f"{colors[self.suit.value]}{ranks[self.rank.value]}{suits[self.suit.value]}{colors[4]}"
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class Deck:
-    def __init__(self):
-        self.cards = [Card(rank, suit) for suit in Suit for rank in Rank]
-        self.shuffle()
-
-    def shuffle(self):
-        random.shuffle(self.cards)
-
-    def deal_card(self):
-        return self.cards.pop()
-
-    def __str__(self):
-        return ", ".join(map(str, self.cards))
-
-
-class Player:
-    def __init__(self, deck: Deck):
-        self.card1 = deck.deal_card()
-        self.card2 = deck.deal_card()
-
-    def print_hand(self):
-        print(f"{self.card1}, {self.card2}")
-    
-    def set_hand(self, card1: Card, card2: Card):
-        self.card1 = card1
-        self.card2 = card2
 
 
 class PokerGame:
-    def __init__(self, num_players: int):
+    def __init__(self, num_players: int, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, ante: int = 0):
         self.deck = Deck()
-        self.players = [Player(self.deck) for _ in range(num_players)]
+        self.players = [Player("Player " + str(_ + 1), buy_in) for _ in range(num_players)]
+        for player in self.players:
+            player.deal_hand(self.deck)
         self.board = []
+        self.current_pot = 0
+        self.bet_to_call = 0
+        self.small_blind = small_blind
+        self.big_blind = big_blind
+        self.ante = ante
+        self.button = 0
 
     def deal_board(self, num_cards: int = 1):
         for _ in range(num_cards):
             self.board.append(self.deck.deal_card())
 
-    def print_player_hands(self):
-        for i, player in enumerate(self.players):
-            print(f"\nPlayer {i + 1}:")
-            player.print_hand()
-
     def print_board(self):
         print("Board:")
         print(", ".join(map(str, self.board)))
 
-    def set_board(self, new_board: List[Card]):
-        self.board = new_board
-
-    def get_hand_rank(self, player) -> Tuple[str, List[Card]]:
+    def get_hand_rank(self, player : Player):
         hand_rank = ""
         hand_played = []
+
+        # Get all cards
         all_cards = self.board.copy()
-        all_cards.append(player.card1)
-        all_cards.append(player.card2)
+        all_cards.append(player.card1) # type: ignore
+        all_cards.append(player.card2) # type: ignore
 
         # Sort cards by rank
         all_cards.sort(reverse=True)
@@ -145,22 +53,22 @@ class PokerGame:
                                         
                                         # Check if the current straight is higher than the previous highest straight
                                         if suit_cards[i].rank.value > highest_straight_rank:
-                                            hand_rank = "Straight Flush"
+                                            hand_rank = handRank.STRAIGHT_FLUSH
                                             highest_straight_rank = suit_cards[i].rank.value
                                             hand_played = [suit_cards[i], suit_cards[j], suit_cards[k], suit_cards[l], suit_cards[m]]
                                     
-                                    # considers edge case of ace high straight
-                                    elif (suit_cards[m] == Rank.ACE and suit_cards[i] == Rank.KING and suit_cards[j] == Rank.QUEEN and 
-                                        suit_cards[k] == Rank.JACK and suit_cards[l] == Rank.TEN):
-                                        hand_rank = "Straight Flush"
-                                        hand_played = [suit_cards[m], suit_cards[i], suit_cards[j], suit_cards[k], suit_cards[l]]
+                                    # considers edge case of Royal Flush
+                                    if (suit_cards[i] == Rank.ACE and suit_cards[j] == Rank.KING and suit_cards[k] == Rank.QUEEN and 
+                                        suit_cards[l] == Rank.JACK and suit_cards[m] == Rank.TEN):
+                                        hand_rank = handRank.ROYAL_FLUSH
+                                        hand_played = [suit_cards[i], suit_cards[j], suit_cards[k], suit_cards[l], suit_cards[m]]
                                         return hand_rank, hand_played
                                     # considers edge case of ace low straight
-                                    elif (suit_cards[i] == Rank.ACE and suit_cards[j] == Rank.FIVE and suit_cards[k] == Rank.FOUR and 
+                                    if (suit_cards[i] == Rank.ACE and suit_cards[j] == Rank.FIVE and suit_cards[k] == Rank.FOUR and 
                                         suit_cards[l] == Rank.THREE and suit_cards[m] == Rank.TWO):
                                         if Rank.FIVE.value > highest_straight_rank: # type: ignore
                                             highest_straight_rank = Rank.FIVE.value # type: ignore
-                                            hand_rank = "Straight Flush"
+                                            hand_rank = handRank.STRAIGHT_FLUSH
                                             hand_played = [suit_cards[j], suit_cards[k], suit_cards[l], suit_cards[m], suit_cards[i]]
         if highest_straight_rank != -1:
             return hand_rank, hand_played
@@ -169,7 +77,7 @@ class PokerGame:
         # Check for four of a kind and return heightest kicker
         for i in range(len(all_cards) - 3):
             if all_cards[i] == all_cards[i + 3]:
-                hand_rank = "Four of a Kind"
+                hand_rank = handRank.FOUR_OF_A_KIND
                 hand_played = all_cards[i : i + 4]
                 if (all_cards[0] != all_cards[i]):
                     hand_played.append(all_cards[0])
@@ -184,7 +92,7 @@ class PokerGame:
                 if all_cards[i] == all_cards[i + 2]:
                     for j in range(len(all_cards) - 1):
                         if all_cards[j] == all_cards[j + 1] and all_cards[i] != all_cards[j]:
-                            hand_rank = "Full House"
+                            hand_rank = handRank.FULL_HOUSE
                             hand_played = all_cards[i : i + 3]
                             hand_played.append(all_cards[j])
                             hand_played.append(all_cards[j + 1])
@@ -195,7 +103,7 @@ class PokerGame:
         for suit in Suit:
             suit_cards = [card for card in all_cards if card.suit == suit]
             if len(suit_cards) >= 5:
-                hand_rank = "Flush"
+                hand_rank = handRank.FLUSH
                 hand_played = suit_cards[:5]
                 return hand_rank, hand_played
         
@@ -203,31 +111,32 @@ class PokerGame:
         # Check for straight
         highest_straight_rank = -1
         
-        for i in range(7):
-            for j in range(i + 1, 7):
-                for k in range(j + 1, 7):
-                    for l in range(k + 1, 7):
-                        for m in range(l + 1, 7):
+        for i in range(len(all_cards)):
+            for j in range(i + 1, len(all_cards)):
+                for k in range(j + 1, len(all_cards)):
+                    for l in range(k + 1, len(all_cards)):
+                        for m in range(l + 1, len(all_cards)):
                             # checks for straight
                             if (all_cards[i] == all_cards[j] + 1 and all_cards[i] == all_cards[k] + 2 and all_cards[i] == all_cards[l] + 3 and all_cards[i] == all_cards[m] + 4):
                                 
                                 # Check if the current straight is higher than the previous highest straight
                                 if all_cards[i].rank.value > highest_straight_rank:
-                                    hand_rank = "Straight"
+                                    hand_rank = handRank.STRAIGHT
                                     highest_straight_rank = all_cards[i].rank.value
                                     hand_played = [all_cards[i], all_cards[j], all_cards[k], all_cards[l], all_cards[m]]
                             
                             # considers edge case of ace high straight
-                            elif (all_cards[m] == Rank.ACE and all_cards[i] == Rank.KING and all_cards[j] == Rank.QUEEN and 
-                                all_cards[k] == Rank.JACK and all_cards[l] == Rank.TEN):
-                                hand_rank = "Straight"
-                                hand_played = [all_cards[m], all_cards[i], all_cards[j], all_cards[k], all_cards[l]]
+                            if (all_cards[i] == Rank.ACE and all_cards[j] == Rank.KING and all_cards[k] == Rank.QUEEN and 
+                                all_cards[l] == Rank.JACK and all_cards[m] == Rank.TEN):
+                                hand_rank = handRank.STRAIGHT
+                                hand_played = [all_cards[i], all_cards[j], all_cards[k], all_cards[l], all_cards[m]]
                                 return hand_rank, hand_played
+                            
                             # considers edge case of ace low straight
-                            elif (all_cards[i] == Rank.ACE and all_cards[j] == Rank.FIVE and all_cards[k] == Rank.FOUR and 
+                            if (all_cards[i] == Rank.ACE and all_cards[j] == Rank.FIVE and all_cards[k] == Rank.FOUR and 
                                 all_cards[l] == Rank.THREE and all_cards[m] == Rank.TWO):
                                 highest_straight_rank = Rank.FIVE.value # type: ignore
-                                hand_rank = "Straight"
+                                hand_rank = handRank.STRAIGHT
                                 hand_played = [all_cards[j], all_cards[k], all_cards[l], all_cards[m], all_cards[i]]
 
         if highest_straight_rank != -1:
@@ -237,7 +146,7 @@ class PokerGame:
         # Check for heightest three of a kind and return heightest kicker
         for i in range(len(all_cards) - 2):
             if all_cards[i] == all_cards[i + 2]:
-                hand_rank = "Three of a Kind"
+                hand_rank = handRank.THREE_OF_A_KIND
                 hand_played = all_cards[i : i + 3]
                 if (all_cards[0] != all_cards[i] and all_cards[1] != all_cards[i]):
                     hand_played.append(all_cards[0])
@@ -251,12 +160,13 @@ class PokerGame:
 
                 return hand_rank, hand_played
         
+
         # Check for two pair and return heightest kicker
         for i in range(len(all_cards) - 1):
             if all_cards[i] == all_cards[i + 1]:
                 for j in range(i + 2, len(all_cards) - 1):
                     if all_cards[j] == all_cards[j + 1]:
-                        hand_rank = "Two Pair"
+                        hand_rank = handRank.TWO_PAIR
                         hand_played = all_cards[i : i + 2]
                         hand_played.append(all_cards[j])
                         hand_played.append(all_cards[j + 1])
@@ -268,10 +178,11 @@ class PokerGame:
                             hand_played.append(all_cards[4])
                         return hand_rank, hand_played
               
+        
         # Check for pair and return heightest kicker
         for i in range(len(all_cards) - 1):
             if all_cards[i] == all_cards[i + 1]:
-                hand_rank = "Pair"
+                hand_rank = handRank.PAIR
                 hand_played = all_cards[i : i + 2]
                 if (all_cards[0] != all_cards[i] and all_cards[1] != all_cards[i] and all_cards[2] != all_cards[i]):
                     hand_played.append(all_cards[0])
@@ -292,32 +203,102 @@ class PokerGame:
                 return hand_rank, hand_played
         
         # Return highest card
-        hand_rank = "High Card"
+        hand_rank = handRank.HIGH_CARD
         hand_played = all_cards[0:5]
         return hand_rank, hand_played
 
     # evaluate the hands of all players
-    def evaluate_hands(self) -> None:
+    def evaluate_hands(self):
         for i, player in enumerate(self.players):
-            hand = self.get_hand_rank(player)
-            print(f"\nPlayer {i + 1} has {hand[0]}")
+            player.hand_rank, player.hand_played = self.get_hand_rank(player) # type: ignore
+            print(f"\nPlayer {i + 1} has {player.hand_rank}")
             print("Hand: ", end="")
             player.print_hand()
 
-            for j, card in enumerate(hand[1]):
+            for j, card in enumerate(player.hand_played):
                 print(card, end=", ")
     
-    # return the winner of the hand
+    # return the winner of the hand and consider tiebreakers
     def get_winner(self):
+        winner = self.players[0]
+        for player in self.players:
+            if player.hand_rank > winner.hand_rank:
+                winner = player
+            elif player.hand_rank == winner.hand_rank:
+                for i in range(len(player.hand_played)):
+                    if player.hand_played[i] > winner.hand_played[i]:
+                        winner = player
+                        break
+                    elif player.hand_played[i] < winner.hand_played[i]:
+                        break
+        # Check for ties
+        tiedPlayers = [winner]
+        for player in self.players:
+            if player == winner:
+                continue
+            if player.hand_rank == winner.hand_rank:
+                tie = True
+                for i in range(len(player.hand_played)):
+                    if player.hand_played[i] != winner.hand_played[i]:
+                        tie = False
+                        break
+                if tie:
+                    tiedPlayers.append(player)
+        if len(tiedPlayers) > 1:
+            return tiedPlayers
+        return winner
+    
+    def reset(self):
+        self.deck = Deck()
+        for player in self.players:
+            player.reset_hand()
+            player.deal_hand(self.deck)
+        self.board = []
+        self.current_pot = 0
+        self.button = (self.button + 1) % len(self.players)
 
+class HeadsUpPoker(PokerGame):
+    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, ante: int = 0):
+        super().__init__(2, buy_in, small_blind, big_blind, ante)
 
+    # puts chips from player stack into the pot
+    def player_bet(self, player: int, amount: int):
+        self.players[player].bet(amount)
+        self.current_pot += amount
 
+    # calls the current bet
+    def player_call(self, player: int):
+        amount_to_call = self.bet_to_call - self.players[player].round_pot_commitment
+        self.player_bet(player, amount_to_call)
 
-        
-def main():
-    game = PokerGame(2)
-    game.
-    game.evaluate_hands()
+    # raises the current bet to the amount
+    def player_raise(self, player: int, amount: int):
+        self.bet_to_call = amount
+        amount_raised = amount - self.players[player].round_pot_commitment
+        self.player_bet(player, amount_raised)
 
-if __name__ == "__main__":
-    main()
+    # player goes all in as a call and mathces other player's bet
+    def player_all_in_call(self, player: int):
+        total = self.players[player].stack + self.players[player].round_pot_commitment
+        self.player_bet(player, self.players[player].stack)
+        other_player = player + 1 % 2
+        if self.players[other_player].round_pot_commitment > total:
+            diff = self.players[other_player].round_pot_commitment - total
+            self.players[other_player].round_pot_commitment = total
+            self.players[other_player].stack += diff
+
+    # player goes all in as a raise
+    def player_all_in_raise(self, player: int):
+        self.player_raise(player, self.players[player].stack + self.players[player].round_pot_commitment)
+    
+    # folds the player's hand
+    def player_fold(self, player: int):
+        self.players[player].reset_hand()
+    
+    # gives winning player the pot
+    def player_win(self, player: int):
+        self.players[player].stack += self.current_pot
+        self.players[player].stack += self.players[player].round_pot_commitment
+        self.players[player].round_pot_commitment = 0
+        self.current_pot = 0
+        self.players[player].reset_hand()
