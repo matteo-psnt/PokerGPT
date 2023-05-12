@@ -3,26 +3,19 @@ from typing import List, Tuple
 
 
 class PokerGame:
-    def __init__(self, num_players: int, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, ante: int = 0):
+    def __init__(self, num_players: int, buy_in: int = 1000):
         self.deck = Deck()
         self.players = [Player("Player " + str(_ + 1), buy_in) for _ in range(num_players)]
         for player in self.players:
             player.deal_hand(self.deck)
         self.board = []
-        self.current_pot = 0
-        self.bet_to_call = 0
-        self.small_blind = small_blind
-        self.big_blind = big_blind
-        self.ante = ante
-        self.button = 0
 
-    def deal_board(self, num_cards: int = 1):
-        for _ in range(num_cards):
+    def deal_board(self, num_cards: int = 5):
+        for _ in range(num_cards - len(self.board)):
             self.board.append(self.deck.deal_card())
 
-    def print_board(self):
-        print("Board:")
-        print(", ".join(map(str, self.board)))
+    def return_board(self):
+        return(", ".join(map(str, self.board)))
 
     def get_hand_rank(self, player : Player):
         hand_rank = ""
@@ -209,17 +202,11 @@ class PokerGame:
 
     # evaluate the hands of all players
     def evaluate_hands(self):
-        for i, player in enumerate(self.players):
+        for player in self.players:
             player.hand_rank, player.hand_played = self.get_hand_rank(player) # type: ignore
-            print(f"\nPlayer {i + 1} has {player.hand_rank}")
-            print("Hand: ", end="")
-            player.print_hand()
-
-            for j, card in enumerate(player.hand_played):
-                print(card, end=", ")
     
     # return the winner of the hand and consider tiebreakers
-    def get_winner(self):
+    def determine_winner(self):
         winner = self.players[0]
         for player in self.players:
             if player.hand_rank > winner.hand_rank:
@@ -247,58 +234,87 @@ class PokerGame:
         if len(tiedPlayers) > 1:
             return tiedPlayers
         return winner
-    
-    def reset(self):
+
+class HeadsUpPoker(PokerGame):
+    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10):
+        super().__init__(2, buy_in)
+        self.small_blind = small_blind
+        self.big_blind = big_blind
+        self.button = 0
+        self.current_action = 0
+        self.round = "preflop"
+        self.current_pot = 0
+        self.current_bet = 0
+
+    def new_round(self):
         self.deck = Deck()
         for player in self.players:
-            player.reset_hand()
+            player.reset()
             player.deal_hand(self.deck)
         self.board = []
         self.current_pot = 0
-        self.button = (self.button + 1) % len(self.players)
-
-class HeadsUpPoker(PokerGame):
-    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, ante: int = 0):
-        super().__init__(2, buy_in, small_blind, big_blind, ante)
+        self.current_bet = 0
+        self.button = (self.button + 1) % 2
+        self.current_action = self.button
+    
+    def reset_betting(self):
+        self.current_bet = 0
+        for player in self.players:
+            player.round_pot_commitment = 0
 
     # puts chips from player stack into the pot
     def player_bet(self, player: int, amount: int):
-        self.players[player].bet(amount)
         self.current_pot += amount
+        self.players[player].bet(amount)
 
     # calls the current bet
     def player_call(self, player: int):
-        amount_to_call = self.bet_to_call - self.players[player].round_pot_commitment
+        if self.players[player].stack + self.players[player].round_pot_commitment < self.current_bet:
+            self.player_all_in_call(player)
+            return
+        amount_to_call = self.current_bet - self.players[player].round_pot_commitment
         self.player_bet(player, amount_to_call)
 
     # raises the current bet to the amount
     def player_raise(self, player: int, amount: int):
-        self.bet_to_call = amount
+        self.current_bet = amount
         amount_raised = amount - self.players[player].round_pot_commitment
         self.player_bet(player, amount_raised)
 
-    # player goes all in as a call and mathces other player's bet
+    # player goes all in as a call and matches other player's bet
     def player_all_in_call(self, player: int):
-        total = self.players[player].stack + self.players[player].round_pot_commitment
-        self.player_bet(player, self.players[player].stack)
-        other_player = player + 1 % 2
-        if self.players[other_player].round_pot_commitment > total:
-            diff = self.players[other_player].round_pot_commitment - total
-            self.players[other_player].round_pot_commitment = total
-            self.players[other_player].stack += diff
+        total_chips = self.players[player].stack + self.players[player].round_pot_commitment
+        other_player = (player + 1) % 2
+        print("player", player)
+        print("self.players[player].stack" , self.players[player].stack)
+        print("self.players[other_player].stack" , self.players[other_player].stack)
+        print("total_chips" , total_chips)
+        print("current_bet", self.current_bet)
+        if total_chips < self.current_bet:
+            chips_not_covered = self.current_bet - total_chips
+            self.players[other_player].round_pot_commitment = total_chips
+            self.players[other_player].stack += chips_not_covered
+            self.current_pot -= chips_not_covered
+            self.current_bet = total_chips
+            self.player_bet(player, total_chips- self.players[player].round_pot_commitment)
+            print("new:")
+            print("self.players[player].stack" , self.players[player].stack)
+            print("self.players[other_player].stack" , self.players[other_player].stack)
+            print("current_bet", self.current_bet)
+        else:
+            self.player_call(player)
 
     # player goes all in as a raise
     def player_all_in_raise(self, player: int):
-        self.player_raise(player, self.players[player].stack + self.players[player].round_pot_commitment)
-    
-    # folds the player's hand
-    def player_fold(self, player: int):
-        self.players[player].reset_hand()
+        total_raise = self.players[player].stack + self.players[player].round_pot_commitment
+        self.player_raise(player, total_raise)
     
     # gives winning player the pot
-    def player_win(self, player: int):
-        self.players[player].stack += self.current_pot
-        self.players[player].stack += self.players[player].round_pot_commitment
-        self.players[player].round_pot_commitment = 0
-        self.current_pot = 0
-        self.players[player].reset_hand()
+    def player_win(self, player):
+        if isinstance(player, int):
+            self.players[player].stack += self.current_pot
+        elif isinstance(player, Player):
+            player.stack += self.current_pot
+        elif isinstance(player, list):
+            for p in player:
+                p.stack += self.current_pot // len(player)

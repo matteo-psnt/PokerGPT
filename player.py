@@ -42,7 +42,7 @@ class Player:
         self.stack -= amount
         self.round_pot_commitment += amount
 
-    def reset_hand(self):
+    def reset(self):
         self.card1 = None
         self.card2 = None
         self.round_pot_commitment = 0

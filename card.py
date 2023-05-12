@@ -54,7 +54,7 @@ class Card:
         return Rank(new_rank)
 
     def __str__(self):
-        suits = ["♠️", "♥️", "♦️", "♣️"]
+        suits = ["S", "H", "D", "C"]
         ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
         return f"{ranks[self.rank.value]}{suits[self.suit.value]}"
 
