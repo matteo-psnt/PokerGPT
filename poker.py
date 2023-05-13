@@ -14,7 +14,7 @@ class PokerGame:
         for _ in range(num_cards - len(self.board)):
             self.board.append(self.deck.deal_card())
 
-    def return_board(self):
+    def return_community_cards(self):
         return(", ".join(map(str, self.board)))
 
     def get_hand_rank(self, player : Player):
@@ -285,11 +285,6 @@ class HeadsUpPoker(PokerGame):
     def player_all_in_call(self, player: int):
         total_chips = self.players[player].stack + self.players[player].round_pot_commitment
         other_player = (player + 1) % 2
-        print("player", player)
-        print("self.players[player].stack" , self.players[player].stack)
-        print("self.players[other_player].stack" , self.players[other_player].stack)
-        print("total_chips" , total_chips)
-        print("current_bet", self.current_bet)
         if total_chips < self.current_bet:
             chips_not_covered = self.current_bet - total_chips
             self.players[other_player].round_pot_commitment = total_chips
@@ -297,10 +292,6 @@ class HeadsUpPoker(PokerGame):
             self.current_pot -= chips_not_covered
             self.current_bet = total_chips
             self.player_bet(player, total_chips- self.players[player].round_pot_commitment)
-            print("new:")
-            print("self.players[player].stack" , self.players[player].stack)
-            print("self.players[other_player].stack" , self.players[other_player].stack)
-            print("current_bet", self.current_bet)
         else:
             self.player_call(player)
 

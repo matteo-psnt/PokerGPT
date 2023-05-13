@@ -33,6 +33,10 @@ class Player:
     
     def return_hand(self):
         return f"{self.card1}, {self.card2}"
+    
+    def return_long_hand(self):
+        if self.card1 is not None and self.card2 is not None:
+            return f"{self.card1.long_str()}, {self.card2.long_str()}"
 
     def deal_hand(self, deck: Deck):
         self.card1 = deck.deal_card()

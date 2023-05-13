@@ -1,6 +1,5 @@
 import discord
 from discord.ui import Button, View, InputText
-from discord.ext import commands
 from discord import Option, Interaction, ButtonStyle
 from poker import HeadsUpPoker
 import GPTplayer
@@ -87,6 +86,7 @@ async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
     pokerGame.reset_betting()
     await ctx.send("**Your Cards:**")
     await ctx.send(file=combine_images([f"Deck_images/{card}.png" for card in pokerGame.players[0].return_hand().split(", ")]))
+    print(pokerGame.players[0].player_name, pokerGame.players[1].return_hand())
     
     if pokerGame.button == 0:
         # Player can't cover small blind
