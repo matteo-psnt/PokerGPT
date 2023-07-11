@@ -1,20 +1,28 @@
 import discord
 from discord import Option
+from discord.ui import View, Button
 from poker import HeadsUpPoker
 from settings import TOKEN
 import pokerBot
 
 bot = discord.Bot()
 
-
 @bot.event
 async def on_ready():
     print(f"I have logged in as {bot.user}")
 
-@bot.slash_command(name="ping", description="Replies with the bots ping.")
-async def ping(ctx):
-    latency = round(bot.latency * 1000)
-    await ctx.respond(f"Pong!! {latency}ms :ping_pong:")
+
+@bot.slash_command(name="info", description="Information about the bot")
+async def name(ctx):
+    view = View()
+    view.add_item(Button(label="Add to Server", url="https://discord.com/oauth2/authorize?client_id=1102638957713432708&permissions=277025773568&scope=bot%20applications.commands"))
+    view.add_item(Button(label="Heads Up Texas Hold'em Rules", style=discord.ButtonStyle.url, url="https://www.wikihow.com/Heads-Up-Poker"))
+    view.add_item(Button(label="Source Code", style=discord.ButtonStyle.url, url="https://github.com/matteo-psnt/PokerGPT"))
+    view.add_item(Button(label="Feedback and Suggestions", style=discord.ButtonStyle.url, url="https://forms.gle/Cbai6VHxZt4GrewS9"))
+    view.add_item(Button(label="Help Server", style=discord.ButtonStyle.url, url="https://discord.gg/xEuzZQEr"))
+    await ctx.respond("Hello, I am chatGPT-3.5, a bot that plays poker against you.\nJust type `/play_poker` to start a game.", view=view)
+
+
 
 @bot.slash_command(name="play_poker", description="Starts a game of Texas hold'em against chatGPT-3.5.")
 async def play_poker(ctx, 

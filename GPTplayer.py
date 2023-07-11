@@ -11,25 +11,30 @@ import json
 
 
 def extract_action(json_string, min_raise, max_raise):
-    json_data = json.loads(json_string)
-    action = json_data['action'].capitalize()
-    if action == "Raise":
-        raise_amount = json_data['raise_amount']
-        action = [action, raise_amount]
-    
-    if isinstance(action, list):
-        assert action[0] == "Raise"
-        assert isinstance(action[1], int)
-        if action[1] < min_raise:
-            print("Raise amount too small, raising to minimum")
-            action[1] = min_raise
+    try:
+        json_data = json.loads(json_string)
+        action = json_data['action'].capitalize()
+        if action == "Raise":
+            raise_amount = json_data['raise_amount']
+            action = [action, raise_amount]
         
-        elif action[1] > max_raise:
-            print("Raise amount too large, raising all-in")
-            action = "All-in"
-    return action
+        if isinstance(action, list):
+            assert action[0] == "Raise"
+            assert isinstance(action[1], int)
+            if action[1] < min_raise:
+                print("Raise amount too small, raising to minimum")
+                action[1] = min_raise
+            
+            elif action[1] > max_raise:
+                print("Raise amount too large, raising all-in")
+                action = "All-in"
+        return action
+    except:
+        print("Invalid response from GPT-3")
+        print(json_string)
+        return "Fold"
 
-chat = ChatOpenAI() # type: ignore
+chat = ChatOpenAI(model_name="gpt-3.5-turbo") # type: ignore
 
 template = "You are a proffesional poker bot who is playing a game of heads up Texas Hold'em aginst a human player. You play optimally and will occasionally bluff. You will raise when you have a strong hand. You will only go All-in if you have a very strong hand. You will fold if you think your opponent has a better hand. And will call and check where appropriate. "
 system_message_prompt = SystemMessagePromptTemplate.from_template(template)
