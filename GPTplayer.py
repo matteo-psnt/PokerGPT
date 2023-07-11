@@ -11,28 +11,25 @@ import json
 
 
 def extract_action(json_string, min_raise, max_raise):
-    try:
-        json_data = json.loads(json_string)
-        action = json_data['action'].capitalize()
-        if action == "Raise":
-            raise_amount = json_data['raise_amount']
-            action = [action, raise_amount]
+    json_data = json.loads(json_string)
+    action = json_data['action'].capitalize()
+    if action == "Raise":
+        print(json_data)
+        raise_amount = json_data['raise_amount']
+        action = [action, raise_amount]
+    
+    if isinstance(action, list):
+        assert action[0] == "Raise"
+        assert isinstance(action[1], int)
+        if action[1] < min_raise:
+            print("Raise amount too small, raising to minimum")
+            action[1] = min_raise
         
-        if isinstance(action, list):
-            assert action[0] == "Raise"
-            assert isinstance(action[1], int)
-            if action[1] < min_raise:
-                print("Raise amount too small, raising to minimum")
-                action[1] = min_raise
-            
-            elif action[1] > max_raise:
-                print("Raise amount too large, raising all-in")
-                action = "All-in"
-        return action
-    except:
-        print("Invalid response from GPT-3")
-        print(json_string)
-        return "Fold"
+        elif action[1] > max_raise:
+            print("Raise amount too large, raising all-in")
+            action = "All-in"
+    return action
+
 
 chat = ChatOpenAI(model_name="gpt-3.5-turbo") # type: ignore
 
@@ -45,10 +42,11 @@ def pre_flop_small_blind(pokerGame: HeadsUpPoker):
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
     You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
     Your hand is {hand}. The pot is {pot} chips. 
-    You are small blind and the action is on you.
+    You are the small blind and it's your turn.
     It costs {amount_to_call} chips to call.
-    Based on this information, what action would you like to take? (Call, Raise, All-in, or Fold), provide no explanation for your action.
-    Reply in JSON format and provide no explanation for your action. If aplicable include the amount you want to raise by.
+    What action would you take? (Call, Raise, All-in, or Fold)
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
@@ -67,9 +65,10 @@ def pre_flop_big_blind(pokerGame: HeadsUpPoker):
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
     You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
     Your hand is {hand}. The pot is {pot} chips. 
-    You are big blind and the action checks to you.
-    Based on this information, what action would you like to take? (Check, Raise, or All-in), provide no explanation for your action.
-    Reply in JSON format and provide no explanation for your action. If aplicable include the amount you want to raise by.
+    You are the big blind and it's your turn.
+    What action would you take? (Check, Raise, or All-in)
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
@@ -88,10 +87,12 @@ def first_to_act(pokerGame: HeadsUpPoker):
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
     You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
     Your hand is {hand}. The pot is {pot} chips. 
-    It is the {round} round and the first action is on you. The community cards are {community_cards}.
-    Based on this information, what action would you like to take? (Check, Raise, or All-in), provide no explanation for your action.
-    Reply in JSON format and provide no explanation for your action. If aplicable include the amount you want to raise by.
+    It's the {round} round and you're first to act. The community cards are {community_cards}.
+    What action would you take? (Check, Raise, or All-in)
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
+
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     chain = LLMChain(llm=chat, prompt=chat_prompt)
@@ -104,14 +105,17 @@ def first_to_act(pokerGame: HeadsUpPoker):
 
 def player_check(pokerGame: HeadsUpPoker):
     # return Check, Raise, or All-in
-    human_template = '''
+    human_template = """
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
     You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
     Your hand is {hand}. The pot is {pot} chips. 
     It is the {round} round and the action checks to you. The community cards are {community_cards}.
-    Based on this information, what action would you like to take? (Check, Raise, or All-in), provide no explanation for your action.
-    Reply in JSON format and provide no explanation for your action. If aplicable include the amount you want to raise by.
-    '''
+    Based on this information, what action would you like to take? (Check, Raise, or All-in). Please provide no explanation for your action.
+    Please reply in JSON format like the following example:
+    {{"action": "your action here", "raise_amount": "your raise amount here if applicable"}}
+    Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
+    """
+
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     chain = LLMChain(llm=chat, prompt=chat_prompt)
@@ -128,12 +132,14 @@ def player_raise(pokerGame: HeadsUpPoker):
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
     You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
     Your hand is {hand}. The pot is {pot} chips.
-    It is the {round} round. The community cards are {community_cards}.
-    The opponent raises to {opponent_raise} chips.
+    It's the {round} round. The community cards are {community_cards}.
+    Your opponent has raised to {opponent_raise} chips.
     It costs {amount_to_call} chips to call.
-    Based on this information, what action would you like to take? (Call, Raise, All-in, or Fold), provide no explanation for your action.
-    Reply in JSON format and provide no explanation for your action. If aplicable include the amount you want to raise by.
+    What action would you take? (Call, Raise, All-in, or Fold)
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
+
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     chain = LLMChain(llm=chat, prompt=chat_prompt)
@@ -151,12 +157,13 @@ def player_all_in(pokerGame: HeadsUpPoker):
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
     You have {stack} chips in your stack.
     Your hand is {hand}. The pot is {pot} chips.
-    It is the {round} round. The community cards are {community_cards}.
-    The opponent goes all in for {opponent_raise} chips.
+    It's the {round} round. The community cards are {community_cards}.
+    Your opponent has gone all in for {opponent_raise} chips.
     It costs {amount_to_call} chips to call.
-    Based on this information, what action would you like to take? (Call, or Fold), provide no explanation for your action.
-    Reply in JSON format and provide no explanation for your action. If aplicable include the amount you want to raise by.
+    What action would you take? (Call, or Fold)
+    Please reply in the following JSON format: {{"action": "your action",}}
     '''
+
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
     chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
     chain = LLMChain(llm=chat, prompt=chat_prompt)
