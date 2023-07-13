@@ -11,11 +11,12 @@ import json
 
 
 def extract_action(json_string, min_raise, max_raise):
+    print(json_string)
     json_data = json.loads(json_string)
     action = json_data['action'].capitalize()
     if action == "Raise":
-        print(json_data)
         raise_amount = json_data['raise_amount']
+        raise_amount = int(raise_amount)
         action = [action, raise_amount]
     
     if isinstance(action, list):
@@ -31,7 +32,7 @@ def extract_action(json_string, min_raise, max_raise):
     return action
 
 
-chat = ChatOpenAI(model_name="gpt-3.5-turbo") # type: ignore
+chat = ChatOpenAI(model_name="gpt-4") # type: ignore
 
 template = "You are a proffesional poker bot who is playing a game of heads up Texas Hold'em aginst a human player. You play optimally and will occasionally bluff. You will raise when you have a strong hand. You will only go All-in if you have a very strong hand. You will fold if you think your opponent has a better hand. And will call and check where appropriate. "
 system_message_prompt = SystemMessagePromptTemplate.from_template(template)
@@ -45,7 +46,7 @@ def pre_flop_small_blind(pokerGame: HeadsUpPoker):
     You are the small blind and it's your turn.
     It costs {amount_to_call} chips to call.
     What action would you take? (Call, Raise, All-in, or Fold)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -67,7 +68,7 @@ def pre_flop_big_blind(pokerGame: HeadsUpPoker):
     Your hand is {hand}. The pot is {pot} chips. 
     You are the big blind and it's your turn.
     What action would you take? (Check, Raise, or All-in)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -89,7 +90,7 @@ def first_to_act(pokerGame: HeadsUpPoker):
     Your hand is {hand}. The pot is {pot} chips. 
     It's the {round} round and you're first to act. The community cards are {community_cards}.
     What action would you take? (Check, Raise, or All-in)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -111,8 +112,7 @@ def player_check(pokerGame: HeadsUpPoker):
     Your hand is {hand}. The pot is {pot} chips. 
     It is the {round} round and the action checks to you. The community cards are {community_cards}.
     Based on this information, what action would you like to take? (Check, Raise, or All-in). Please provide no explanation for your action.
-    Please reply in JSON format like the following example:
-    {{"action": "your action here", "raise_amount": "your raise amount here if applicable"}}
+    Please reply in JSON format like the following example: {{"action": "your action here", "raise_amount": your raise amount here if applicable}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     """
 
@@ -136,7 +136,7 @@ def player_raise(pokerGame: HeadsUpPoker):
     Your opponent has raised to {opponent_raise} chips.
     It costs {amount_to_call} chips to call.
     What action would you take? (Call, Raise, All-in, or Fold)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": "your raise amount if applicable"}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 

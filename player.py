@@ -32,7 +32,7 @@ class Player:
         print(f"{self.card1}, {self.card2}")
     
     def return_hand(self):
-        return f"{self.card1}, {self.card2}"
+        return [self.card1, self.card2]
     
     def return_long_hand(self):
         if self.card1 is not None and self.card2 is not None:

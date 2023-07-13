@@ -2,40 +2,8 @@ import discord
 from discord.ui import View, InputText
 from discord import Interaction, ButtonStyle
 from poker import HeadsUpPoker
+from card_display import get_cards
 import GPTplayer
-from PIL import Image
-from io import BytesIO
-
-
-def combine_images(image_files, filename: str='combined.png'):
-    # Open the image files and get their sizes
-    images = [Image.open(filename) for filename in image_files]
-    widths, heights = zip(*(i.size for i in images))
-
-    # Calculate the total width and maximum height
-    total_width = sum(widths)
-    max_height = max(heights)
-
-    # Combine the images horizontally
-    combined = Image.new('RGB', (total_width, max_height))
-    x_offset = 0
-    for image in images:
-        combined.paste(image, (x_offset, 0))
-        x_offset += image.size[0]
-
-    # Shrink the combined image by 20%
-    new_width = int(total_width * 0.80)
-    new_height = int(max_height * 0.80)
-    combined = combined.resize((new_width, new_height))
-
-    # Return the combined and resized image as a Pillow Image object
-    with BytesIO() as image_binary:
-        combined.save(image_binary, 'PNG')
-        image_binary.seek(0)
-
-        # Send the combined and resized image to the channel where the command was invoked
-        file = discord.File(fp=image_binary, filename='combined.png')
-        return file
 
 
 async def play_poker_round(ctx, pokerGame: HeadsUpPoker, timeout: float):
@@ -46,9 +14,10 @@ async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
     pokerGame.round = "preFlop"
     pokerGame.reset_betting()
     await ctx.send("**Your Cards:**")
-    await ctx.send(file=combine_images([f"Deck_images/{card}.png" for card in pokerGame.players[0].return_hand().split(", ")]))
-    print(pokerGame.players[0].player_name, pokerGame.players[1].return_hand())
-    
+    await ctx.send(get_cards(pokerGame.players[0].return_hand(), pokerGame.small_cards))
+    print(pokerGame.players[0].player_name, pokerGame.players[0].return_hand(), pokerGame.players[1].return_hand())
+    if pokerGame.small_cards == True:
+        print("small cards")
     if pokerGame.button == 0:
         # Player can't cover small blind
         if pokerGame.players[0].stack < pokerGame.small_blind:
@@ -147,7 +116,7 @@ async def deal_community_cards(ctx, pokerGame: HeadsUpPoker, round_name: str, ti
         
     # Announce the community cards
     await ctx.send(f"**Community Cards ({round_name.capitalize()}):**")
-    await ctx.send(file=combine_images([f"Deck_images/{card}.png" for card in pokerGame.board]))
+    await ctx.send(get_cards(pokerGame.board, pokerGame.small_cards))
 
     # Announce the current pot
     await ctx.send(f"**Main pot:** {pokerGame.current_pot} chips.")
@@ -170,21 +139,18 @@ async def showdown(ctx, pokerGame: HeadsUpPoker, timeout: float):
     pokerGame.deal_board(5)
     
     # Display the community cards
-    community_card_images = [f"Deck_images/{card}.png" for card in pokerGame.board]
-    community_card_file = combine_images(community_card_images, filename="community_cards.png")
-    await ctx.send("**Community Cards:**", file=community_card_file)
+    await ctx.send("**Community Cards:**")
+    await ctx.send(get_cards(pokerGame.board, pokerGame.small_cards))
     
     pokerGame.evaluate_hands()
     
     # Display each player's hand and hand rank
     for player in pokerGame.players:
-        hand_images = [f"Deck_images/{card}.png" for card in player.return_hand().split(", ")]
-        hand_file = combine_images(hand_images, filename=f"{player.player_name}_hand.png")
-        await ctx.send(f"{player.player_name} has:", file=hand_file)
+        await ctx.send(f"{player.player_name} has:")
+        await ctx.send(get_cards(player.return_hand(), pokerGame.small_cards))
         
-        hand_rank_images = [f"Deck_images/{card}.png" for card in player.hand_played]
-        hand_rank_file =combine_images(hand_rank_images, filename=f"{player.player_name}_hand_rank.png")
-        await ctx.send(f"**{player.hand_rank}**", file=hand_rank_file)
+        await ctx.send(f"**{player.hand_rank}**")
+        await ctx.send(get_cards(player.hand_played, pokerGame.small_cards))
 
     # Determine the winner(s) and handle the pot
     winner = pokerGame.determine_winner()

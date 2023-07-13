@@ -236,7 +236,7 @@ class PokerGame:
         return winner
 
 class HeadsUpPoker(PokerGame):
-    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10):
+    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, small_cards: bool = False):
         super().__init__(2, buy_in)
         self.small_blind = small_blind
         self.big_blind = big_blind
@@ -245,6 +245,7 @@ class HeadsUpPoker(PokerGame):
         self.round = "preflop"
         self.current_pot = 0
         self.current_bet = 0
+        self.small_cards = small_cards
 
     def new_round(self):
         self.deck = Deck()
