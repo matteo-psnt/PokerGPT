@@ -1,6 +1,7 @@
 from card import *
 
 def get_cards(input_list: list[Card], small_cards: bool = False):
+    # replace with your own custom emojis
     red_card_rank_tops = {
         Rank.ACE : "<:red_A_top:1128175151402471515>",
         Rank.TWO : "<:red_2_top:1128175103251857439>",
@@ -54,3 +55,53 @@ def get_cards(input_list: list[Card], small_cards: bool = False):
     
     #join rows together with a new line
     return "\n".join(["".join(top_row), "".join(bottom_row)])
+
+
+'''
+To view the unique identifiers of the custom cards in Discord, 
+you can use the following commands in the server chat:
+
+Red Card Bottoms:
+
+\:red_A_top:
+\:red_2_top:
+\:red_3_top:
+\:red_4_top:
+\:red_5_top:
+\:red_6_top:
+\:red_7_top:
+\:red_8_top:
+\:red_9_top:
+\:red_10_top:
+\:red_J_top:
+\:red_Q_top:
+\:red_K_top:
+
+
+Black  Card Bottoms:
+
+\:black_A_top:
+\:black_2_top:
+\:black_3_top:
+\:black_4_top:
+\:black_5_top:
+\:black_6_top:
+\:black_7_top:
+\:black_8_top:
+\:black_9_top:
+\:black_10_top:
+\:black_J_top:
+\:black_Q_top:
+\:black_K_top:
+
+Suit Card Tops:
+
+\:spade_bottom:
+\:heart_bottom:
+\:diamond_bottom:
+\:club_bottom:
+
+By copying and pasting these commands into the Discord chat, 
+the respective custom cards will be displayed, 
+and their unique identifiers will be shown in the message input field.
+'''
