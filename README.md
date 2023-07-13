@@ -11,18 +11,34 @@ Welcome to the Poker Discord Bot powered by ChatGPT! This bot allows you to play
 - **Customizable Settings**: Adjust various game settings such as starting chips, blind levels, and move timeout.
 - **Error Handling**: The bot incorporates error handling to ensure a smooth user experience and provide informative error messages when necessary.
 
-## Command
+## Commands
 
 To start a game of Texas Hold'em poker, use the following command:
 
-/play_poker [buy-in] [small-blind] [big-blind] [timeout] [small_cards]
-
+`/play_poker [buy-in] [small-blind] [big-blind] [timeout] [small-cards]`
 
 - `buy-in` (optional): Set the starting chips for each player (default: 1000, minimum: 10).
 - `small-blind` (optional): Set the small blind amount (default: 5, minimum: 1).
 - `big-blind` (optional): Set the big blind amount (default: 10, minimum: 2).
 - `timeout` (optional): Set the number of seconds allowed to make a move (default: 30, minimum: 5, maximum: 180).
-- `small_cards` (optional): Use small cards (default: False)
+- `small-cards` (optional): Use small cards (default: False).
+
+---
+
+To get information about the bot, use the following command:
+
+`/info`
+
+---
+
+To print the emoji for a card, use the following command:
+
+`/card_print [rank] [suit]`
+
+- `rank` (optional): The rank of the card. Use A, K, Q, J for face cards, or numbers 2-10 (default: A).
+- `suit` (optional): The suit of the card. Use S, H, D, C for spades, hearts, diamonds, and clubs (default: S).
+
+
 
 ## Setup
 
