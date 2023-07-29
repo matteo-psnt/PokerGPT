@@ -6,7 +6,7 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate,
 )
 from config.config import API_KEY
-from game.poker import HeadsUpPoker
+from game.poker import PokerGameManager
 import json
 
 
@@ -37,7 +37,7 @@ chat = ChatOpenAI(model_name="gpt-4") # type: ignore
 template = "You are a proffesional poker bot who is playing a game of heads up Texas Hold'em aginst a human player. You play optimally and will occasionally bluff. You will raise when you have a strong hand. You will only go All-in if you have a very strong hand. You will fold if you think your opponent has a better hand. And will call and check where appropriate. "
 system_message_prompt = SystemMessagePromptTemplate.from_template(template)
 
-def pre_flop_small_blind(pokerGame: HeadsUpPoker):
+def pre_flop_small_blind(pokerGame: PokerGameManager):
     # return Call, Raise, Fold or All-in
     human_template = '''
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
@@ -60,7 +60,7 @@ def pre_flop_small_blind(pokerGame: HeadsUpPoker):
     return extract_action(response, pokerGame.current_bet * 2, pokerGame.players[1].stack + pokerGame.players[1].round_pot_commitment)
 
 
-def pre_flop_big_blind(pokerGame: HeadsUpPoker):
+def pre_flop_big_blind(pokerGame: PokerGameManager):
     # return Check, Raise, or All-in
     human_template = '''
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
@@ -82,7 +82,7 @@ def pre_flop_big_blind(pokerGame: HeadsUpPoker):
     return extract_action(response, pokerGame.current_bet * 2, pokerGame.players[1].stack + pokerGame.players[1].round_pot_commitment)
 
 
-def first_to_act(pokerGame: HeadsUpPoker):
+def first_to_act(pokerGame: PokerGameManager):
     # return Check, Raise, or All-in
     human_template = '''
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
@@ -104,7 +104,7 @@ def first_to_act(pokerGame: HeadsUpPoker):
     return extract_action(response, pokerGame.current_bet * 2, pokerGame.players[1].stack + pokerGame.players[1].round_pot_commitment)
 
 
-def player_check(pokerGame: HeadsUpPoker):
+def player_check(pokerGame: PokerGameManager):
     # return Check, Raise, or All-in
     human_template = """
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
@@ -126,7 +126,7 @@ def player_check(pokerGame: HeadsUpPoker):
     return extract_action(response, pokerGame.current_bet * 2, pokerGame.players[1].stack + pokerGame.players[1].round_pot_commitment)
 
 
-def player_raise(pokerGame: HeadsUpPoker):
+def player_raise(pokerGame: PokerGameManager):
     # return Call, Raise, All-in, or Fold
     human_template = '''
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
@@ -151,7 +151,7 @@ def player_raise(pokerGame: HeadsUpPoker):
     return extract_action(response, pokerGame.current_bet * 2, pokerGame.players[1].stack + pokerGame.players[1].round_pot_commitment)
 
 
-def player_all_in(pokerGame: HeadsUpPoker):
+def player_all_in(pokerGame: PokerGameManager):
     # return Call, or Fold
     human_template = '''
     The small blind is {small_blind} chips and the big blind is {big_blind} chips.
