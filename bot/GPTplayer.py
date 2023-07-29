@@ -5,8 +5,8 @@ from langchain.prompts.chat import (
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
-from settings import API_KEY
-from poker import HeadsUpPoker
+from config.config import API_KEY
+from game.poker import HeadsUpPoker
 import json
 
 
@@ -46,7 +46,7 @@ def pre_flop_small_blind(pokerGame: HeadsUpPoker):
     You are the small blind and it's your turn.
     It costs {amount_to_call} chips to call.
     What action would you take? (Call, Raise, All-in, or Fold)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your short explanation for your action"}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -68,7 +68,7 @@ def pre_flop_big_blind(pokerGame: HeadsUpPoker):
     Your hand is {hand}. The pot is {pot} chips. 
     You are the big blind and it's your turn.
     What action would you take? (Check, Raise, or All-in)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your short explanation for your action"}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -90,7 +90,7 @@ def first_to_act(pokerGame: HeadsUpPoker):
     Your hand is {hand}. The pot is {pot} chips. 
     It's the {round} round and you're first to act. The community cards are {community_cards}.
     What action would you take? (Check, Raise, or All-in)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your short explanation for your action"}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -112,7 +112,7 @@ def player_check(pokerGame: HeadsUpPoker):
     Your hand is {hand}. The pot is {pot} chips. 
     It is the {round} round and the action checks to you. The community cards are {community_cards}.
     Based on this information, what action would you like to take? (Check, Raise, or All-in). Please provide no explanation for your action.
-    Please reply in JSON format like the following example: {{"action": "your action here", "raise_amount": your raise amount here if applicable}}
+    Please reply in JSON format like the following example: {{"action": "your action here", "raise_amount": your raise amount here if applicable, "explanation": "your short explanation for your action"}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     """
 
@@ -136,7 +136,7 @@ def player_raise(pokerGame: HeadsUpPoker):
     Your opponent has raised to {opponent_raise} chips.
     It costs {amount_to_call} chips to call.
     What action would you take? (Call, Raise, All-in, or Fold)
-    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable}}
+    Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your short explanation for your action"}}
     Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
     '''
 
@@ -161,7 +161,7 @@ def player_all_in(pokerGame: HeadsUpPoker):
     Your opponent has gone all in for {opponent_raise} chips.
     It costs {amount_to_call} chips to call.
     What action would you take? (Call, or Fold)
-    Please reply in the following JSON format: {{"action": "your action",}}
+    Please reply in the following JSON format: {{"action": "your action", "explanation": "your short explanation for your action"}}
     '''
 
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)

@@ -1,8 +1,8 @@
-from player import *
+from game.player import *
 from typing import List, Tuple
 
 
-class PokerGame:
+class PokerGameHandeler:
     def __init__(self, num_players: int, buy_in: int = 1000):
         self.deck = Deck()
         self.players = [Player("Player " + str(_ + 1), buy_in) for _ in range(num_players)]
@@ -235,7 +235,7 @@ class PokerGame:
             return tiedPlayers
         return winner
 
-class HeadsUpPoker(PokerGame):
+class HeadsUpPokerGameHandeler(PokerGameHandeler):
     def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, small_cards: bool = False):
         super().__init__(2, buy_in)
         self.small_blind = small_blind

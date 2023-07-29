@@ -1,21 +1,21 @@
 import discord
 from discord.ui import View, InputText
 from discord import Interaction, ButtonStyle
-from poker import HeadsUpPoker
-from card_display import get_cards
-from db_utils import DatabaseManager
-import GPTplayer
+from game.poker import HeadsUpPokerGameHandeler
+from bot.card_display import get_cards
+from db.db_utils import DatabaseManager
+import bot.GPTplayer as GPTplayer
 
 
-class DiscordPoker:
-    def __init__(self, ctx, pokerGame: HeadsUpPoker, db: DatabaseManager, timeout: float):
+class DiscordPokerManager:
+    def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
         self.ctx = ctx
         self.pokerGame = pokerGame
         self.db = db
         self.timeout = timeout
 
 
-    async def play_poker_round(self):
+    async def play_round(self):
         self.pokerGame.new_round()
         await self.pre_flop()
 
@@ -137,9 +137,9 @@ class DiscordPoker:
         
         # Determine who is first to act and prompt them for their move
         if self.pokerGame.button == 0:
-            await self.chatGPT_first_to_act()
+            await self.chatGPT_acts_first()
         elif self.pokerGame.button == 1:
-            await self.player_first_to_act()
+            await self.player_acts_first()
 
     async def showdown(self):
         await self.ctx.send("***Showdown!!***")
@@ -190,11 +190,11 @@ class DiscordPoker:
             await self.ctx.respond("Play another round?")
             await self.ctx.send("", view=self.newRoundView(self.ctx, self.pokerGame, self.db, self.timeout))
 
-    async def player_first_to_act(self):
+    async def player_acts_first(self):
         view = self.checkView(self.ctx, self.pokerGame, self.db, self.timeout)
         await self.ctx.send(f"What do you want to do?", view=view)
 
-    async def chatGPT_first_to_act(self):      
+    async def chatGPT_acts_first(self):      
         GPTmove = GPTplayer.first_to_act(self.pokerGame)
         if GPTmove == "Check":
             await self.ctx.send("ChatGPT __Checks.__")
@@ -262,7 +262,7 @@ class DiscordPoker:
         view = self.allInCallView(self.ctx, self.pokerGame, self.db, self.timeout)
         await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it is {self.pokerGame.current_bet - self.pokerGame.players[0].round_pot_commitment} more to call", view=view)
 
-    async def next_betting_round(self):
+    async def move_to_next_betting_round(self):
         self.pokerGame.current_action = self.pokerGame.button
         if self.pokerGame.round == "preFlop":
             await self.deal_community_cards("flop")
@@ -277,13 +277,13 @@ class DiscordPoker:
         self.pokerGame.current_action = (self.pokerGame.current_action + 1) % 2
         if self.pokerGame.round == "preFlop":
             if self.pokerGame.current_bet > self.pokerGame.big_blind:
-                await self.next_betting_round()
+                await self.move_to_next_betting_round()
                 return
             if self.pokerGame.button == 0:
                 GPTmove = GPTplayer.pre_flop_big_blind(self.pokerGame)
                 if GPTmove == "Check":
                     await self.ctx.send("ChatGPT __Checks.__")
-                    await self.next_betting_round()
+                    await self.move_to_next_betting_round()
                     return
                 elif GPTmove == "All-in":
                     await self.chatGPT_all_in()
@@ -301,10 +301,10 @@ class DiscordPoker:
                     await self.ctx.send(f"What do you want to do?", view=view)
                     return
                 elif self.pokerGame.current_action == 1:
-                    await self.next_betting_round()
+                    await self.move_to_next_betting_round()
         else:
             if self.pokerGame.current_bet > 0:
-                await self.next_betting_round()
+                await self.move_to_next_betting_round()
                 return
             if self.pokerGame.button == 0:
                 if self.pokerGame.current_action == 1:
@@ -312,12 +312,12 @@ class DiscordPoker:
                     await self.ctx.send(f"What do you want to do?", view=view)
                     return
                 elif self.pokerGame.current_action == 0:
-                    await self.next_betting_round()
+                    await self.move_to_next_betting_round()
             elif self.pokerGame.button == 1:
                 GPTmove = GPTplayer.player_check(self.pokerGame)
                 if GPTmove == "Check":
                     await self.ctx.send("ChatGPT __Checks.__")
-                    await self.next_betting_round()
+                    await self.move_to_next_betting_round()
                     return
                 elif GPTmove == "All-in":
                     await self.chatGPT_all_in()
@@ -345,7 +345,7 @@ class DiscordPoker:
         await self.ctx.send("", view=self.newRoundView(self.ctx, self.pokerGame, self.db, self.timeout))
 
     class raiseModal(discord.ui.Modal):
-        def __init__(self, ctx, pokerGame: HeadsUpPoker, db: DatabaseManager, timeout: float):
+        def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
             super().__init__(title = "Raise", timeout = timeout)
             self.ctx = ctx
             self.pokerGame = pokerGame
@@ -385,7 +385,7 @@ class DiscordPoker:
                 await player_raise(self.ctx, self.pokerGame, self.db, self.timeout, amount_raised) # type: ignore
             
     class callView(View):
-        def __init__(self, ctx, pokerGame: HeadsUpPoker, db: DatabaseManager, timeout: float):
+        def __init__(self, DiscordPokerManager, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
             super().__init__(timeout=timeout)
             self.responded = False
             self.ctx = ctx
@@ -436,7 +436,7 @@ class DiscordPoker:
                 await self.fold_player(0)
         
     class checkView(View):
-        def __init__(self, ctx, pokerGame: HeadsUpPoker, db: DatabaseManager, timeout: float):
+        def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
             super().__init__(timeout=timeout)
             self.responded = False
             self.ctx = ctx
@@ -477,7 +477,7 @@ class DiscordPoker:
                 await self.player_all_in()
 
     class allInCallView(View):
-        def __init__(self, ctx, pokerGame: HeadsUpPoker, db: DatabaseManager, timeout: float):
+        def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
             super().__init__(timeout=timeout)
             self.responded = False
             self.ctx = ctx
@@ -513,7 +513,7 @@ class DiscordPoker:
                 await self.fold_player(0)
 
     class newRoundView(View):
-        def __init__(self, ctx, pokerGame: HeadsUpPoker, db: DatabaseManager, timeout: float):
+        def __init__(self, discordGameHandeler,ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
             super().__init__(timeout=timeout)
             self.responded = False
             self.ctx = ctx
@@ -539,7 +539,7 @@ class DiscordPoker:
                 self.responded = True
                 if self.message:
                     await self.message.edit(content="*Starting a new round.*", view=None)
-                await self.play_poker_round()
+                await self.play_round()
             
         @discord.ui.button(label="End Game", style=ButtonStyle.red)
         async def end_game_button_callback(self, button, interaction):

@@ -1,10 +1,11 @@
 import discord
 from discord import Option
 from discord.ui import View, Button
-from poker import HeadsUpPoker
-from card_display import *
-from settings import TOKEN
-import pokerBot
+from game.poker import HeadsUpPoker
+from bot.card_display import *
+from config.config import DEV_TOKEN as TOKEN
+from db.db_utils import DatabaseManager
+from bot.pokerBotClass import DiscordPoker
 
 
 bot = discord.Bot()
@@ -34,12 +35,11 @@ async def name(ctx):
     await ctx.respond("Hello, I am PokerGPT, a poker bot that plays poker against you using GPT-4.\nJust type `/play_poker` to start a game.", view=view)
 
 
-
 @bot.slash_command(name="play_poker", description="Starts a game of Texas hold'em against chatGPT-3.5.")
 async def play_poker(ctx, 
-                     buy_in:        Option(int, name="buy-in", description="Set starting chips", default=1000, min_value=10), # type: ignore
-                     small_blind:   Option(int, name="small-blind", description="Set small blind", default=5, min_value=1), # type: ignore
-                     big_blind:     Option(int, name="big-blind", description="Set big blind", default=10, min_value=2), # type: ignore
+                     buy_in:        Option(int, name="buy-in", description="Set starting chips", default=1000, min_value=10, max_value=10000000), # type: ignore
+                     small_blind:   Option(int, name="small-blind", description="Set small blind", default=5, min_value=1, max_vlaue=2500000), # type: ignore
+                     big_blind:     Option(int, name="big-blind", description="Set big blind", default=10, min_value=2, max_value=5000000), # type: ignore
                      timeout:       Option(float, name="timeout", description="Set how amny seconds to make a move", default=30, min_value=5, max_value=180), # type: ignore
                      small_cards:   Option(bool, name="small-cards", description="Use small cards", default=False)): # type: ignore
     if (buy_in < 2 * big_blind):
@@ -58,11 +58,14 @@ async def play_poker(ctx,
     await ctx.send(f"Both players start with {buy_in} chips.")
     await ctx.send(f"The small blind is {small_blind} chips and the big blind is {big_blind} chips.")
     pokerGame = HeadsUpPoker(buy_in, small_blind, big_blind, small_cards)
-
     pokerGame.players[0].player_name = ctx.author.name
     pokerGame.players[1].player_name = "ChatGPT"
     pokerGame.new_round()
-    await pokerBot.play_poker_round(ctx, pokerGame, timeout)
+
+    
+    with DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name) as db:
+        discordHandler = DiscordPoker(ctx, pokerGame, db, timeout)
+        await discordHandler.play_round()
 
 @bot.slash_command(name="card_print", description="prints the emoji for a card")
 async def play_poker(ctx,

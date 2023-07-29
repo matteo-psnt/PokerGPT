@@ -1,5 +1,5 @@
 from typing import Any
-from deck import *
+from game.deck import *
 
 
 class handRank(Enum):

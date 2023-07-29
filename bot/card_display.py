@@ -1,4 +1,4 @@
-from card import *
+from game.card import *
 
 def get_cards(input_list: list[Card], small_cards: bool = False):
     # replace with your own custom emojis

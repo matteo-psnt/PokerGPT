@@ -1,16 +1,17 @@
 import discord
 from discord.ui import View, InputText
 from discord import Interaction, ButtonStyle
-from poker import HeadsUpPoker
-from card_display import get_cards
-import GPTplayer
+from game.poker import HeadsUpPokerGameHandeler
+from bot.card_display import get_cards
+from db.db_utils import DatabaseManager
+import bot.GPTplayer as GPTplayer
 
 
-async def play_poker_round(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def play_poker_round(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     pokerGame.new_round()
-    await pre_flop(ctx, pokerGame, timeout)
+    await pre_flop(ctx, pokerGame, db, timeout)
 
-async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def pre_flop(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     pokerGame.round = "preFlop"
     pokerGame.reset_betting()
     await ctx.send("**Your Cards:**")
@@ -32,7 +33,7 @@ async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
             await ctx.send(f"ChatGPT is __All-in for {pokerGame.players[1].stack} chips.__")
             pokerGame.player_raise(0, pokerGame.small_blind)
             pokerGame.player_raise(1, pokerGame.players[1].stack)
-            view = allInCallView(ctx, pokerGame, timeout)
+            view = allInCallView(ctx, pokerGame, db, timeout)
             await ctx.send(f"What do you want to do? You are in for {pokerGame.players[0].round_pot_commitment} chips, it costs {pokerGame.players[1].round_pot_commitment - pokerGame.players[0].round_pot_commitment} more to call.", view=view)
             return
         
@@ -41,16 +42,17 @@ async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
             await ctx.send(f"ChatGPT places big blind of {pokerGame.big_blind} chips, and {pokerGame.players[0].player_name} places small blind of {pokerGame.small_blind} chips.")
             pokerGame.player_raise(0, pokerGame.small_blind)
             pokerGame.player_raise(1, pokerGame.big_blind)
-            view = allInCallView(ctx, pokerGame, timeout)
+            view = allInCallView(ctx, pokerGame, db, timeout)
             await ctx.send(f"You have {pokerGame.players[0].stack} chips.")
             await ctx.send(f"What do you want to do? You are in for {pokerGame.players[0].round_pot_commitment}", view=view)
             return
 
+        # Regular scenario, both players can cover blinds
         await ctx.send(f"ChatGPT places big blind of {pokerGame.big_blind} chips, and {pokerGame.players[0].player_name} places small blind of {pokerGame.small_blind} chips.")
         pokerGame.player_raise(0, pokerGame.small_blind)
         pokerGame.player_raise(1, pokerGame.big_blind)
         
-        view = callView(ctx, pokerGame, timeout)
+        view = callView(ctx, pokerGame, db, timeout)
         await ctx.send(f"You have {pokerGame.players[0].stack} chips.")
         await ctx.send(f"What do you want to do? You are in for {pokerGame.players[0].round_pot_commitment}", view=view)
 
@@ -78,11 +80,11 @@ async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
             pokerGame.player_raise(1, pokerGame.small_blind)
             pokerGame.player_raise(0, pokerGame.big_blind)
             await ctx.send(f"{pokerGame.players[0].player_name} is __All-in for {pokerGame.players[0].stack + pokerGame.players[0].round_pot_commitment} chips.__")
-            view = allInCallView(ctx, pokerGame, timeout)
+            view = allInCallView(ctx, pokerGame, db, timeout)
             await ctx.send(f"What do you want to do? You are in for {pokerGame.players[0].round_pot_commitment} chips, and it will cost you {pokerGame.players[1].round_pot_commitment - pokerGame.players[0].round_pot_commitment} more chips to call.", view=view)
             return
    
-
+        # Regular scenario, both players can cover blinds
         await ctx.send(f"{pokerGame.players[0].player_name} places big blind of {pokerGame.big_blind} chips, and ChatGPT places small blind of {pokerGame.small_blind} chips.")
         pokerGame.player_raise(1, pokerGame.small_blind)
         pokerGame.player_raise(0, pokerGame.big_blind)
@@ -92,18 +94,18 @@ async def pre_flop(ctx, pokerGame: HeadsUpPoker, timeout: float):
         if GPTmove == "Call":
             await ctx.send("ChatGPT __Calls.__")
             pokerGame.player_call(1)
-            await next_action(ctx, pokerGame, timeout)
+            await next_action(ctx, pokerGame, db, timeout)
         elif GPTmove == "All-in":
-            await chatGPT_all_in(ctx, pokerGame, timeout)
+            await chatGPT_all_in(ctx, pokerGame, db, timeout)
         elif GPTmove == "Fold":
-            await fold_player(ctx, pokerGame, timeout, 1)
+            await fold_player(ctx, pokerGame, db, timeout, 1)
         elif isinstance(GPTmove, list):
-            await chatGPT_raise(ctx, pokerGame, timeout, GPTmove[1])
+            await chatGPT_raise(ctx, pokerGame, db, timeout, GPTmove[1])
         else:
             print(GPTmove)
             raise Exception("pokerGPT outputted an invalid move")
 
-async def deal_community_cards(ctx, pokerGame: HeadsUpPoker, round_name: str, timeout: float):
+async def deal_community_cards(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float, round_name: str):
     # Set the current round and deal the community cards
     pokerGame.round = round_name
     pokerGame.reset_betting()
@@ -127,12 +129,11 @@ async def deal_community_cards(ctx, pokerGame: HeadsUpPoker, round_name: str, ti
     
     # Determine who is first to act and prompt them for their move
     if pokerGame.button == 0:
-        await chatGPT_first_to_act(ctx, pokerGame, timeout)
+        await chatGPT_first_to_act(ctx, pokerGame, db, timeout)
     elif pokerGame.button == 1:
-        await player_first_to_act(ctx, pokerGame, timeout)
+        await player_first_to_act(ctx, pokerGame, db, timeout)
 
-
-async def showdown(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def showdown(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     await ctx.send("***Showdown!!***")
     
     # Deal the community cards
@@ -179,27 +180,26 @@ async def showdown(ctx, pokerGame: HeadsUpPoker, timeout: float):
     else:
         # Prompt to play another round
         await ctx.respond("Play another round?")
-        await ctx.send("", view=newRoundView(ctx, pokerGame, timeout))
+        await ctx.send("", view=newRoundView(ctx, pokerGame, db, timeout))
 
-
-async def player_first_to_act(ctx, pokerGame: HeadsUpPoker, timeout: float):
-    view = checkView(ctx, pokerGame, timeout)
+async def player_first_to_act(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
+    view = checkView(ctx, pokerGame, db, timeout)
     await ctx.send(f"What do you want to do?", view=view)
 
-async def chatGPT_first_to_act(ctx, pokerGame: HeadsUpPoker, timeout: float):      
+async def chatGPT_first_to_act(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):      
     GPTmove = GPTplayer.first_to_act(pokerGame)
     if GPTmove == "Check":
         await ctx.send("ChatGPT __Checks.__")
-        await next_action(ctx, pokerGame, timeout)
+        await next_action(ctx, pokerGame, db, timeout)
     elif GPTmove == "All-in":
-        await chatGPT_all_in(ctx, pokerGame, timeout)
+        await chatGPT_all_in(ctx, pokerGame, db, timeout)
     elif isinstance(GPTmove, list):
-        await chatGPT_raise(ctx, pokerGame, timeout, GPTmove[1])
+        await chatGPT_raise(ctx, pokerGame, db, timeout, GPTmove[1])
     else:
         print(GPTmove)
         raise Exception("pokerGPT outputted an invalid move")
 
-async def player_raise(ctx, pokerGame, timeout: float, amount: int):
+async def player_raise(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float, amount: int):
     # Raise the player's bet
     pokerGame.player_raise(0, amount)
 
@@ -208,19 +208,18 @@ async def player_raise(ctx, pokerGame, timeout: float, amount: int):
     if GPTmove == "Call":
         await ctx.send("ChatGPT __Calls Raise.__")
         pokerGame.player_call(1)
-        await next_action(ctx, pokerGame, timeout)
+        await next_action(ctx, pokerGame, db, timeout)
     elif GPTmove == "All-in":
-        await chatGPT_all_in(ctx, pokerGame, timeout)
+        await chatGPT_all_in(ctx, pokerGame, db, timeout)
     elif GPTmove == "Fold":
-        await fold_player(ctx, pokerGame, timeout, 1)
+        await fold_player(ctx, pokerGame, db, timeout, 1)
     elif isinstance(GPTmove, list):
-        await chatGPT_raise(ctx, pokerGame, timeout, GPTmove[1])
+        await chatGPT_raise(ctx, pokerGame, db, timeout, GPTmove[1])
     else:
         print(GPTmove)
         raise Exception("pokerGPT outputted an invalid move")
 
-
-async def chatGPT_raise(ctx, pokerGame: HeadsUpPoker, timeout: float, amount: int):
+async def chatGPT_raise(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float, amount: int):
     # Raise the bet and announce it
     await ctx.send(f"ChatGPT __Raises to {amount} chips.__")
     pokerGame.player_raise(1, amount)
@@ -229,64 +228,60 @@ async def chatGPT_raise(ctx, pokerGame: HeadsUpPoker, timeout: float, amount: in
     # Check if the player needs to go all-in
     if pokerGame.players[0].stack + pokerGame.players[0].round_pot_commitment <= pokerGame.current_bet:
         await ctx.send(f"ChatGPT puts you __All-In for {pokerGame.players[0].stack + pokerGame.players[0].round_pot_commitment} chips.__")
-        view = allInCallView(ctx, pokerGame, timeout)
+        view = allInCallView(ctx, pokerGame, db, timeout)
     else:
-        view = callView(ctx, pokerGame, timeout)
+        view = callView(ctx, pokerGame, db, timeout)
 
     # Prompt the player for their action
     await ctx.send(f"What do you want to do? You are in for {pokerGame.players[0].round_pot_commitment} chips, it costs __{pokerGame.current_bet - pokerGame.players[0].round_pot_commitment} more to call.__", view=view)
 
-
-async def player_all_in(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def player_all_in(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     pokerGame.player_all_in_raise(0)
     GPTmove = GPTplayer.player_all_in(pokerGame)
     if GPTmove == "Call":
         await ctx.send(f"ChatGPT __Calls All-in.__")
         pokerGame.player_call(1)
-        await showdown(ctx, pokerGame, timeout)
+        await showdown(ctx, pokerGame, db, timeout)
     elif GPTmove == "Fold":
-        await fold_player(ctx, pokerGame, timeout, 1)
+        await fold_player(ctx, pokerGame, db, timeout, 1)
     else:
         print(GPTmove)
         raise Exception("pokerGPT outputted an invalid move")
 
-
-async def chatGPT_all_in(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def chatGPT_all_in(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     await ctx.send(f"ChatGPT is __All-in for {pokerGame.players[1].stack + pokerGame.players[1].round_pot_commitment} chips.__")
     pokerGame.player_all_in_raise(1)
-    view = allInCallView(ctx, pokerGame, timeout)
+    view = allInCallView(ctx, pokerGame, db, timeout)
     await ctx.send(f"What do you want to do? You are in for {pokerGame.players[0].round_pot_commitment} chips, it is {pokerGame.current_bet - pokerGame.players[0].round_pot_commitment} more to call", view=view)
 
-
-async def next_betting_round(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def next_betting_round(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     pokerGame.current_action = pokerGame.button
     if pokerGame.round == "preFlop":
-        await deal_community_cards(ctx, pokerGame, "flop", timeout)
+        await deal_community_cards(ctx, pokerGame, db, timeout, "flop")
     elif pokerGame.round == "flop":
-        await deal_community_cards(ctx, pokerGame, "turn", timeout)
+        await deal_community_cards(ctx, pokerGame, db, timeout, "turn")
     elif pokerGame.round == "turn":
-        await deal_community_cards(ctx, pokerGame, "river", timeout)
+        await deal_community_cards(ctx, pokerGame, db, timeout, "river")
     elif pokerGame.round == "river":
-        await showdown(ctx, pokerGame, timeout)
+        await showdown(ctx, pokerGame, db, timeout)
 
-
-async def next_action(ctx, pokerGame: HeadsUpPoker, timeout: float):
+async def next_action(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
     pokerGame.current_action = (pokerGame.current_action + 1) % 2
     if pokerGame.round == "preFlop":
         if pokerGame.current_bet > pokerGame.big_blind:
-            await next_betting_round(ctx, pokerGame, timeout)
+            await next_betting_round(ctx, pokerGame, db, timeout)
             return
         if pokerGame.button == 0:
             GPTmove = GPTplayer.pre_flop_big_blind(pokerGame)
             if GPTmove == "Check":
                 await ctx.send("ChatGPT __Checks.__")
-                await next_betting_round(ctx, pokerGame, timeout)
+                await next_betting_round(ctx, pokerGame, db, timeout)
                 return
             elif GPTmove == "All-in":
-                await chatGPT_all_in(ctx, pokerGame, timeout)
+                await chatGPT_all_in(ctx, pokerGame, db, timeout)
                 return
             elif isinstance(GPTmove, list):
-                await chatGPT_raise(ctx, pokerGame, timeout, GPTmove[1])
+                await chatGPT_raise(ctx, pokerGame, db, timeout, GPTmove[1])
                 return
             else:
                 print(GPTmove)
@@ -294,40 +289,39 @@ async def next_action(ctx, pokerGame: HeadsUpPoker, timeout: float):
                 
         if pokerGame.button == 1:
             if pokerGame.current_action == 0:
-                view = checkView(ctx, pokerGame, timeout)
+                view = checkView(ctx, pokerGame, db, timeout)
                 await ctx.send(f"What do you want to do?", view=view)
                 return
             elif pokerGame.current_action == 1:
-                await next_betting_round(ctx, pokerGame, timeout)
+                await next_betting_round(ctx, pokerGame, db, timeout)
     else:
         if pokerGame.current_bet > 0:
-            await next_betting_round(ctx, pokerGame, timeout)
+            await next_betting_round(ctx, pokerGame, db, timeout)
             return
         if pokerGame.button == 0:
             if pokerGame.current_action == 1:
-                view = checkView(ctx, pokerGame, timeout)
+                view = checkView(ctx, pokerGame, db, timeout)
                 await ctx.send(f"What do you want to do?", view=view)
                 return
             elif pokerGame.current_action == 0:
-                await next_betting_round(ctx, pokerGame, timeout)
+                await next_betting_round(ctx, pokerGame, db, timeout)
         elif pokerGame.button == 1:
             GPTmove = GPTplayer.player_check(pokerGame)
             if GPTmove == "Check":
                 await ctx.send("ChatGPT __Checks.__")
-                await next_betting_round(ctx, pokerGame, timeout)
+                await next_betting_round(ctx, pokerGame, db, timeout)
                 return
             elif GPTmove == "All-in":
-                await chatGPT_all_in(ctx, pokerGame, timeout)
+                await chatGPT_all_in(ctx, pokerGame, db, timeout)
                 return
             elif isinstance(GPTmove, list):
-                await chatGPT_raise(ctx, pokerGame, timeout, GPTmove[1])
+                await chatGPT_raise(ctx, pokerGame, db, timeout, GPTmove[1])
                 return
             else:
                 print(GPTmove)
                 raise Exception("pokerGPT outputted an invalid move")
 
-
-async def fold_player(ctx, pokerGame: HeadsUpPoker, timeout: float, player):
+async def fold_player(ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float, player):
     if player == 0:
         await ctx.send(f"ChatGPT wins __{pokerGame.current_pot} chips.__")
         pokerGame.player_win(1)
@@ -340,13 +334,14 @@ async def fold_player(ctx, pokerGame: HeadsUpPoker, timeout: float, player):
         await ctx.send(f"You have {pokerGame.players[0].stack} chips.")
         await ctx.send(f"ChatGPT has {pokerGame.players[1].stack} chips.")
     await ctx.respond("Play another round?")
-    await ctx.send("", view=newRoundView(ctx, pokerGame, timeout))
+    await ctx.send("", view=newRoundView(ctx, pokerGame, db, timeout))
 
 class raiseModal(discord.ui.Modal):
-    def __init__(self, title : str, ctx, pokerGame: HeadsUpPoker, timeout: float):
-        super().__init__(title = title, timeout = timeout)
+    def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
+        super().__init__(title = "Raise", timeout = timeout)
         self.ctx = ctx
         self.pokerGame = pokerGame
+        self.db = db
         self.timeout = timeout
 
         self.add_item(InputText(label="Amount",
@@ -362,7 +357,7 @@ class raiseModal(discord.ui.Modal):
             amount_raised = int(amount_raised) # type: ignore
             if amount_raised == self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment:
                 await interaction.response.send_message("You are __All-in.__")
-                await player_all_in(self.ctx, self.pokerGame, self.timeout) # type: ignore
+                await player_all_in(self.ctx, self.pokerGame, self.db, self.timeout) # type: ignore
                 return
             if amount_raised > self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment:
                 await interaction.response.send_message("You do not have enough chips.")
@@ -376,24 +371,25 @@ class raiseModal(discord.ui.Modal):
             if amount_raised >= self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment:
                 opponent_stack = self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment
                 await interaction.response.edit_message(content=f"You put chat gpt __All-in for {opponent_stack} chips.__", view=None)
-                await player_all_in(self.ctx, self.pokerGame, self.timeout) # type: ignore
+                await player_all_in(self.ctx, self.pokerGame, self.db, self.timeout) # type: ignore
 
             await interaction.response.edit_message(content=f"You __Raise to {amount_raised} chips.__", view=None)
-            await player_raise(self.ctx, self.pokerGame, self.timeout, amount_raised) # type: ignore
+            await player_raise(self.ctx, self.pokerGame, self.db, self.timeout, amount_raised) # type: ignore
         
 class callView(View):
-    def __init__(self, ctx, pokerGame: HeadsUpPoker, timeout: float):
+    def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
         super().__init__(timeout=timeout)
-        self.timeout = timeout
         self.responded = False
-        self.pokerGame = pokerGame
         self.ctx = ctx
+        self.pokerGame = pokerGame
+        self.db = db
+        self.timeout = timeout
 
     async def on_timeout(self):
         if not self.responded:
             if self.message:
                 await self.message.edit(content="You took too long! You __Fold.__", view=None)
-            await fold_player(self.ctx, self.pokerGame, self.timeout, 0)
+            await fold_player(self.ctx, self.pokerGame, self.db, self.timeout, 0)
     
     async def check(self, interaction: discord.Interaction):
         if interaction.user:
@@ -406,13 +402,13 @@ class callView(View):
             self.pokerGame.player_call(0)
             if self.message:
                 await self.message.edit(content="You __Call.__", view=None)
-            await next_action(self.ctx, self.pokerGame, self.timeout)
+            await next_action(self.ctx, self.pokerGame, self.db, self.timeout)
 
     @discord.ui.button(label="Raise", style=ButtonStyle.green)
     async def raise_button_callback(self, button, interaction):
         if await self.check(interaction):
             self.responded = True
-            await interaction.response.send_modal(raiseModal(title="Raised", ctx=self.ctx, pokerGame=self.pokerGame, timeout=self.timeout))
+            await interaction.response.send_modal(raiseModal(self.ctx, self.pokerGame, self.db, self.timeout))
     
     @discord.ui.button(label="All-in", style=ButtonStyle.green)
     async def all_in_button_callback(self, button, interaction):
@@ -420,7 +416,7 @@ class callView(View):
             self.responded = True
             if self.message:
                 await self.message.edit(content=f"You are __All In for {self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
-            await player_all_in(self.ctx, self.pokerGame, self.timeout) # type: ignore
+            await player_all_in(self.ctx, self.pokerGame, self.db, self.timeout) # type: ignore
             
     
     @discord.ui.button(label="Fold", style=ButtonStyle.red)
@@ -429,21 +425,22 @@ class callView(View):
             self.responded = True
             if self.message:
                 await self.message.edit(content="You __Fold.__", view=None)
-            await fold_player(self.ctx, self.pokerGame, self.timeout, 0)
+            await fold_player(self.ctx, self.pokerGame, self.db, self.timeout, 0)
     
 class checkView(View):
-    def __init__(self, ctx, pokerGame: HeadsUpPoker, timeout: float):
+    def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
         super().__init__(timeout=timeout)
-        self.timeout = timeout
         self.responded = False
-        self.pokerGame = pokerGame
         self.ctx = ctx
+        self.pokerGame = pokerGame
+        self.db = db
+        self.timeout = timeout
 
     async def on_timeout(self):
         if not self.responded:
             if self.message:
                 await self.message.edit(content="You took too long! You __Check.__", view=None)
-            await next_action(self.ctx, self.pokerGame, self.timeout)
+            await next_action(self.ctx, self.pokerGame, self.db, self.timeout)
         
     async def check(self, interaction: discord.Interaction):
         if interaction.user:
@@ -455,13 +452,13 @@ class checkView(View):
             self.responded = True
             if self.message:
                 await self.message.edit(content="You __Check.__", view=None)
-            await next_action(self.ctx, self.pokerGame, self.timeout)
+            await next_action(self.ctx, self.pokerGame, self.db, self.timeout)
 
     @discord.ui.button(label="Raise", style=ButtonStyle.green)
     async def raise_button_callback(self, button, interaction):
         if await self.check(interaction):
             self.responded = True
-            await interaction.response.send_modal(raiseModal(title="Raised", ctx=self.ctx, pokerGame=self.pokerGame, timeout=self.timeout))
+            await interaction.response.send_modal(raiseModal(self.ctx, self.pokerGame, self.db, self.timeout))
     
     @discord.ui.button(label="All-in", style=ButtonStyle.green)
     async def all_in_button_callback(self, button, interaction):
@@ -469,21 +466,22 @@ class checkView(View):
             self.responded = True
             if self.message:
                 await self.message.edit(content=f"You are __All-in for {self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
-            await player_all_in(self.ctx, self.pokerGame, self.timeout)
+            await player_all_in(self.ctx, self.pokerGame, self.db, self.timeout)
 
 class allInCallView(View):
-    def __init__(self, ctx, pokerGame: HeadsUpPoker, timeout: float):
+    def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
         super().__init__(timeout=timeout)
-        self.timeout = timeout
         self.responded = False
-        self.pokerGame = pokerGame
         self.ctx = ctx
+        self.pokerGame = pokerGame
+        self.db = db
+        self.timeout = timeout
 
     async def on_timeout(self):
         if (self.responded == False):
             if self.message:
                 await self.message.edit(content="You took too long! You __Fold__.", view=None)
-            await fold_player(self.ctx, self.pokerGame, self.timeout, 0)
+            await fold_player(self.ctx, self.pokerGame, self.db, self.timeout, 0)
     
     async def check(self, interaction: discord.Interaction):
         if interaction.user:
@@ -496,7 +494,7 @@ class allInCallView(View):
             if self.message:
                 await self.message.edit(content="You __Call the All-in.__", view=None)
             self.pokerGame.player_call(0)
-            await showdown(self.ctx, self.pokerGame, self.timeout)
+            await showdown(self.ctx, self.pokerGame, self.db, self.timeout)
     
     @discord.ui.button(label="Fold", style=ButtonStyle.red)
     async def fold_button_callback(self, button, interaction):
@@ -504,15 +502,16 @@ class allInCallView(View):
             self.responded = True
             if self.message:
                 await self.message.edit(content="You __Fold.__", view=None)
-            await fold_player(self.ctx, self.pokerGame, self.timeout, 0)
+            await fold_player(self.ctx, self.pokerGame, self.db, self.timeout, 0)
 
 class newRoundView(View):
-    def __init__(self, ctx, pokerGame: HeadsUpPoker, timeout: float):
+    def __init__(self, ctx, pokerGame: HeadsUpPokerGameHandeler, db: DatabaseManager, timeout: float):
         super().__init__(timeout=timeout)
-        self.timeout = timeout
         self.responded = False
-        self.pokerGame = pokerGame
         self.ctx = ctx
+        self.pokerGame = pokerGame
+        self.db = db
+        self.timeout = timeout
     
     async def on_timeout(self):
         if (self.responded == False):
@@ -532,7 +531,7 @@ class newRoundView(View):
             self.responded = True
             if self.message:
                 await self.message.edit(content="*Starting a new round.*", view=None)
-            await play_poker_round(self.ctx, self.pokerGame, self.timeout)
+            await play_poker_round(self.ctx, self.pokerGame, self.db, self.timeout)
         
     @discord.ui.button(label="End Game", style=ButtonStyle.red)
     async def end_game_button_callback(self, button, interaction):

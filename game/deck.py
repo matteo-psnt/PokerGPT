@@ -1,4 +1,4 @@
-from card import *
+from game.card import *
 import random
 
 class Deck:
