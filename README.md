@@ -58,14 +58,14 @@ OPENAI_API_KEY=your_openai_api_key
 6. Replace `your_discord_bot_token` with your Discord bot token.
 7. Replace `your_openai_api_key` with your OpenAI API key.
 8. Configure any other settings in the code as needed.
-9. (Optional) If you want to change the model used, open the `GPTplayer.py` file and replace the model from GPT-4 to GPT-3.5-turbo. This can provide faster response times and cost efficiency.
+9. (Optional) If you want to change the model used, open the `bot/GPTplayer.py` file and replace the model from GPT-4 to GPT-3.5-turbo. This can provide faster response times and cost efficiency.
 10. Run the bot script on your preferred hosting environment.
 11. To host the card images, create a new Discord server.
 12. Add the bot to the server where you want to host the images.
 13. In the server where the bot is hosted, import all the images in the `split_deck_images` folder as emojis.
-14. Open the `card_display.py` file and copy its contents.
+14. Open the `bot/card_display.py` file and copy its contents.
 15. Paste the copied text into a Discord channel to obtain a unique identifier for each emoji.
-16. Replace the unique identifiers in the dictionary within the `card_display.py` file.
+16. Replace the unique identifiers in the dictionary within the `bot/card_display.py` file.
     
 Optinal:
 
