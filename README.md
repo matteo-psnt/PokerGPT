@@ -1,7 +1,6 @@
 # Poker Discord Bot - ChatGPT
 
-Welcome to the Poker Discord Bot powered by ChatGPT! This bot allows you to play a virtual game of Texas Hold'em poker with your friends right in your Discord server. The bot utilizes the powerful ChatGPT-3.5 language model developed by OpenAI to provide an interactive and dynamic poker experience.
-
+Welcome to the Poker Discord Bot powered by ChatGPT! This bot allows you to play a virtual game of Texas Hold'em poker with your friends right in your Discord server. The bot utilizes the powerful ChatGPT-3.5 language model developed by OpenAI to provide an interactive and dynamic poker experience. The bot handles all aspects of the game, including dealing cards, managing bets, and determining winners. The bot also incorporates error handling to ensure a smooth user experience and provide informative error messages when necessary. To use the bot in your Discord server, either host the bot yourself using the setup instructions below or invite the bot to your server using the generated invite link.
 ## Features
 
 - **Multiplayer Poker**: Play Texas Hold'em poker with multiple players in your Discord server.
