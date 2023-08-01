@@ -2,21 +2,31 @@ from game.player import *
 from typing import List, Tuple
 
 
-class PokerGame:
+class Dealer:
     def __init__(self, num_players: int, buy_in: int = 1000):
         self.deck = Deck()
         self.players = [Player("Player " + str(_ + 1), buy_in) for _ in range(num_players)]
         for player in self.players:
             player.deal_hand(self.deck)
         self.board = []
+    
+    # deals a new cards
+    def new_deal(self):
+        self.deck = Deck()
+        for player in self.players:
+            player.deal_hand(self.deck)
+        self.board = []
 
+    # deals the board with num_cards
     def deal_board(self, num_cards: int = 5):
         for _ in range(num_cards - len(self.board)):
             self.board.append(self.deck.deal_card())
-
+    
+    # returns the board as a string
     def return_community_cards(self):
         return(", ".join(map(str, self.board)))
 
+    # returns the hand rank and the cards played for a player
     def get_hand_rank(self, player : Player):
         hand_rank = ""
         hand_played = []
@@ -199,7 +209,7 @@ class PokerGame:
         hand_rank = handRank.HIGH_CARD
         hand_played = all_cards[0:5]
         return hand_rank, hand_played
-
+    
     # evaluate the hands of all players
     def evaluate_hands(self):
         for player in self.players:
@@ -235,7 +245,7 @@ class PokerGame:
             return tiedPlayers
         return winner
 
-class PokerGameManager(PokerGame):
+class PokerGameManager(Dealer):
     def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, small_cards: bool = False):
         super().__init__(2, buy_in)
         self.small_blind = small_blind
@@ -246,16 +256,17 @@ class PokerGameManager(PokerGame):
         self.current_pot = 0
         self.current_bet = 0
         self.small_cards = small_cards
+    
+    def return_min_max_raise(self, player: int):
+        min_raise = self.current_bet * 2
+        max_raise = self.players[1].stack + self.players[1].round_pot_commitment
+        return (min_raise, max_raise)
 
     def new_round(self):
-        self.deck = Deck()
-        for player in self.players:
-            player.reset()
-            player.deal_hand(self.deck)
-        self.board = []
+        self.new_deal()
         self.current_pot = 0
         self.current_bet = 0
-        self.button = (self.button + 1) % 2
+        self.button = (self.button + 1) % len(self.players)
         self.current_action = self.button
     
     def reset_betting(self):

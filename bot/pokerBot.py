@@ -4,7 +4,7 @@ from discord import Interaction, ButtonStyle
 from game.poker import PokerGameManager
 from bot.card_display import get_cards
 from db.db_utils import DatabaseManager
-import bot.GPTplayer as GPTplayer
+from bot.GPTplayer import gptPlayer
 
 
 class DiscordPokerManager:
@@ -13,10 +13,11 @@ class DiscordPokerManager:
         self.pokerGame = pokerGame
         self.db = db
         self.timeout = timeout
-
+        self.gptAction = gptPlayer()
 
     async def play_round(self):
         self.pokerGame.new_round()
+        self.gptAction = gptPlayer()
         await self.pre_flop()
 
     async def pre_flop(self):
@@ -97,21 +98,22 @@ class DiscordPokerManager:
             self.pokerGame.player_raise(1, self.pokerGame.small_blind)
             self.pokerGame.player_raise(0, self.pokerGame.big_blind)
 
-            GPTmove = GPTplayer.pre_flop_small_blind(self.pokerGame)
+            action, raise_amount = self.gptAction.pre_flop_small_blind(self.pokerGame)
 
-            if GPTmove == "Call":
+            if action == "Call":
                 await self.ctx.send("ChatGPT __Calls.__")
                 self.pokerGame.player_call(1)
                 await self.next_action()
-            elif GPTmove == "All-in":
+            elif action == "All-in":
                 await self.chatGPT_all_in()
-            elif GPTmove == "Fold":
+            elif action == "Fold":
                 await self.fold_player(1)
-            elif isinstance(GPTmove, list):
-                await self.chatGPT_raise(GPTmove[1])
+            elif action == "Raise":
+                await self.chatGPT_raise(raise_amount)
             else:
-                print(GPTmove)
-                raise Exception("pokerGPT outputted an invalid move")
+                print("Error move given:", action, raise_amount, ", doing Default move of: Fold")
+                await self.fold_player(1)
+                
 
     async def deal_community_cards(self, round_name: str):
         # Set the current round and deal the community cards
@@ -143,6 +145,7 @@ class DiscordPokerManager:
 
     async def showdown(self):
         await self.ctx.send("***Showdown!!***")
+        self.pokerGame.round = "showdown"
         
         # Deal the community cards
         self.pokerGame.deal_board(5)
@@ -194,38 +197,42 @@ class DiscordPokerManager:
         view = self.checkView(self)
         await self.ctx.send(f"What do you want to do?", view=view)
 
-    async def chatGPT_acts_first(self):      
-        GPTmove = GPTplayer.first_to_act(self.pokerGame)
-        if GPTmove == "Check":
+    async def chatGPT_acts_first(self):
+        action, raise_amount = self.gptAction.first_to_act(self.pokerGame)
+
+        if action == "Check":
             await self.ctx.send("ChatGPT __Checks.__")
             await self.next_action()
-        elif GPTmove == "All-in":
+        elif action == "All-in":
             await self.chatGPT_all_in()
-        elif isinstance(GPTmove, list):
-            await self.chatGPT_raise(GPTmove[1])
+        elif action == "Raise":
+            await self.chatGPT_raise(raise_amount)
         else:
-            print(GPTmove)
-            raise Exception("pokerGPT outputted an invalid move")
+            print("Error move given:", action, raise_amount, ", doing Default move of: Check")
+            await self.ctx.send("ChatGPT __Checks.__")
+            await self.next_action()
 
     async def player_raise(self, amount: int):
         # Raise the player's bet
         self.pokerGame.player_raise(0, amount)
 
         # Get GPT's move and handle it
-        GPTmove = GPTplayer.player_raise(self.pokerGame)
-        if GPTmove == "Call":
+        action, raise_amount = self.gptAction.player_raise(self.pokerGame)
+
+        if action == "Call":
             await self.ctx.send("ChatGPT __Calls Raise.__")
             self.pokerGame.player_call(1)
             await self.next_action()
-        elif GPTmove == "All-in":
-            await self.chatGPT_all_in()
-        elif GPTmove == "Fold":
+        elif action == "Fold":
             await self.fold_player(1)
-        elif isinstance(GPTmove, list):
-            await self.chatGPT_raise(GPTmove[1])
+        elif action == "All-in":
+            await self.chatGPT_all_in()
+        elif action == "Raise":
+            await self.chatGPT_raise(raise_amount)
         else:
-            print(GPTmove)
-            raise Exception("pokerGPT outputted an invalid move")
+            print("Error move given:", action, raise_amount, ", doing Default move of: Fold")
+            await self.fold_player(1)
+
 
     async def chatGPT_raise(self, amount: int):
         # Raise the bet and announce it
@@ -245,16 +252,17 @@ class DiscordPokerManager:
 
     async def player_all_in(self):
         self.pokerGame.player_all_in_raise(0)
-        GPTmove = GPTplayer.player_all_in(self.pokerGame)
-        if GPTmove == "Call":
+        action, raise_amount = self.gptAction.player_all_in(self.pokerGame)
+
+        if action == "Call":
             await self.ctx.send(f"ChatGPT __Calls All-in.__")
             self.pokerGame.player_call(1)
             await self.showdown()
-        elif GPTmove == "Fold":
+        elif action == "Fold":
             await self.fold_player(1)
         else:
-            print(GPTmove)
-            raise Exception("pokerGPT outputted an invalid move")
+            print("Error move given:", action, raise_amount, ", doing Default move of: Fold")
+            await self.fold_player(1)
 
     async def chatGPT_all_in(self):
         await self.ctx.send(f"ChatGPT is __All-in for {self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment} chips.__")
@@ -280,20 +288,22 @@ class DiscordPokerManager:
                 await self.move_to_next_betting_round()
                 return
             if self.pokerGame.button == 0:
-                GPTmove = GPTplayer.pre_flop_big_blind(self.pokerGame)
-                if GPTmove == "Check":
+                action, raise_amount = self.gptAction.pre_flop_big_blind(self.pokerGame)
+                if action == "Check":
                     await self.ctx.send("ChatGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
-                elif GPTmove == "All-in":
+                elif action == "All-in":
                     await self.chatGPT_all_in()
                     return
-                elif isinstance(GPTmove, list):
-                    await self.chatGPT_raise(GPTmove[1])
+                elif action == "Raise":
+                    await self.chatGPT_raise(raise_amount)
                     return
                 else:
-                    print(GPTmove)
-                    raise Exception("pokerGPT outputted an invalid move")
+                    print("Error move given:", action, raise_amount, ", doing Default move of: Check")
+                    await self.ctx.send("ChatGPT __Checks.__")
+                    await self.move_to_next_betting_round()
+                    return
                     
             if self.pokerGame.button == 1:
                 if self.pokerGame.current_action == 0:
@@ -314,20 +324,23 @@ class DiscordPokerManager:
                 elif self.pokerGame.current_action == 0:
                     await self.move_to_next_betting_round()
             elif self.pokerGame.button == 1:
-                GPTmove = GPTplayer.player_check(self.pokerGame)
-                if GPTmove == "Check":
+                action, raise_amount = self.gptAction.player_check(self.pokerGame)
+
+                if action == "Check":
                     await self.ctx.send("ChatGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
-                elif GPTmove == "All-in":
+                elif action == "All-in":
                     await self.chatGPT_all_in()
                     return
-                elif isinstance(GPTmove, list):
-                    await self.chatGPT_raise(GPTmove[1])
+                elif action == "Raise":
+                    await self.chatGPT_raise(raise_amount)
                     return
                 else:
-                    print(GPTmove)
-                    raise Exception("pokerGPT outputted an invalid move")
+                    print("Error move given:", action, raise_amount, ", doing Default move of: Check")
+                    await self.ctx.send("ChatGPT __Checks.__")
+                    await self.move_to_next_betting_round()
+                    return
 
     async def fold_player(self, player):
         if player == 0:
