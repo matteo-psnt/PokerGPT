@@ -1,21 +1,42 @@
 from langchain import PromptTemplate
 from langchain.chains import LLMChain
 from langchain.chat_models import ChatOpenAI
+from langchain.llms import OpenAI
 from langchain.prompts.chat import (
     ChatPromptTemplate,
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
     MessagesPlaceholder
 )
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationSummaryMemory
 from config.config import API_KEY
 from game.poker import PokerGameManager
 import json
 
 
+
+
+# Define the SUMMARY_PROMPT template
+SUMMARY_PROMPT_TEMPLATE = """
+Current summary of the oppenent's play and thought process of the AI:
+{summary}
+
+New lines of conversation:
+{new_lines}
+
+What is the curent thought process of the AI? And what has been the play from the Opponent?:
+"""
+
+# Create the SUMMARY_PROMPT using PromptTemplate
+SUMMARY_PROMPT = PromptTemplate(
+    input_variables=["summary", "new_lines"],
+    template=SUMMARY_PROMPT_TEMPLATE
+)
+
+
 class gptPlayer:
     def __init__(self):
-        chat = ChatOpenAI(model_name="gpt-4") # type: ignore
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo")
         template = '''
         You are a proffesional poker bot who is playing a game of heads up Texas Hold'em aginst a human player. 
         You play optimally and will occasionally bluff. You will raise when you have a strong hand. 
@@ -29,12 +50,20 @@ class gptPlayer:
         human_message_prompt = HumanMessagePromptTemplate.from_template("{input}")
         chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, mesage_placeholder, human_message_prompt])
 
-        memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+        memory = ConversationSummaryMemory(
+            ai_prefix="PokerGPT", 
+            llm=OpenAI(temperature=0, verbose=True), 
+            prompt=SUMMARY_PROMPT,
+            return_messages=True,
+            memory_key="chat_history")
+            
 
-        self.chain = LLMChain(llm=chat, prompt=chat_prompt, memory=memory, verbose=True)
+
+        self.chain = LLMChain(llm=llm, prompt=chat_prompt, memory=memory, verbose=True)
         
     def _extract_action(self, json_string, pokerGame: PokerGameManager):
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
+        print(json_string)
         try:
             json_data = json.loads(json_string)
             action = json_data['action'].capitalize()
@@ -43,11 +72,11 @@ class gptPlayer:
                 raise_amount = json_data['raise_amount']
                 raise_amount = int(raise_amount)
                 
-                if action < min_raise:
+                if raise_amount < min_raise:
                     print("Raise amount too small, raising to minimum")
-                    action[1] = min_raise
+                    raise_amount = min_raise
 
-                elif action > max_raise:
+                elif raise_amount > max_raise:
                     print("Raise amount too large, raising all-in")
                     action = "All-in"
                     raise_amount = pokerGame.players[1].stack
@@ -57,8 +86,6 @@ class gptPlayer:
             print(erro)
             print("Returning default action")
             return ("Default", 0)
-
-            
 
 
     def pre_flop_small_blind(self, pokerGame: PokerGameManager):
@@ -80,7 +107,7 @@ class gptPlayer:
         You are the small blind and it's your turn.
         It costs {amount_to_call} chips to call.
         What action would you take? (Call, Raise, All-in, or Fold)
-        ---'''
+        '''
 
         formatted_text = human_template.format(**inputs)
         response = self.chain.run(formatted_text)
@@ -105,7 +132,7 @@ class gptPlayer:
         You are the small blind and it's your turn.
         It costs {amount_to_call} chips to call.
         What action would you take? (Check, Raise, or All-in)
-        ---'''
+        '''
 
         formatted_text = human_template.format(**inputs)
         response = self.chain.run(formatted_text)
@@ -130,7 +157,7 @@ class gptPlayer:
         Your hand is {hand}. The pot is {pot} chips.
         It's the {round} round and you're first to act. The community cards are {community_cards}.
         What action would you take? (Check, Raise, or All-in)
-        ---'''
+        '''
 
         formatted_text = human_template.format(**inputs)
         response = self.chain.run(formatted_text)
@@ -154,8 +181,7 @@ class gptPlayer:
         You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
         Your hand is {hand}. The pot is {pot} chips.
         It is the {round} round and the action checks to you. The community cards are {community_cards}.
-        Based on this information, what action would you like to take? (Check, Raise, or All-in). Please provide no explanation for your action.
-        ---
+        Based on this information, what action would you like to take? (Check, Raise, or All-in).
         """        
         
         formatted_text = human_template.format(**inputs)
@@ -186,7 +212,7 @@ class gptPlayer:
         Your opponent has raised to {opponent_raise} chips.
         It costs {amount_to_call} chips to call.
         What action would you take? (Call, Raise, All-in, or Fold)
-        ---'''
+        '''
 
         formatted_text = human_template.format(**inputs)
 

@@ -2,6 +2,5 @@
 .venv
 .vscode
 __pycache__
-deck_images/.DS_Store
-.DS_Store
+*.DS_Store
 run_bot_dev.py
