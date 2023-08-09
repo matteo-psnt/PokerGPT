@@ -10,6 +10,10 @@ class Dealer:
             player.deal_hand(self.deck)
         self.board = []
     
+    # sets player name
+    def set_player_name(self, player: int, name: str):
+        self.players[player].player_name = name
+    
     # deals a new cards
     def new_deal(self):
         self.deck = Deck()
@@ -246,7 +250,7 @@ class Dealer:
         return winner
 
 class PokerGameManager(Dealer):
-    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10, small_cards: bool = False):
+    def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10):
         super().__init__(2, buy_in)
         self.small_blind = small_blind
         self.big_blind = big_blind
@@ -255,7 +259,6 @@ class PokerGameManager(Dealer):
         self.round = "preflop"
         self.current_pot = 0
         self.current_bet = 0
-        self.small_cards = small_cards
     
     def return_min_max_raise(self, player: int):
         min_raise = self.current_bet * 2

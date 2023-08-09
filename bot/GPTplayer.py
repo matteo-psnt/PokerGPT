@@ -42,7 +42,7 @@ class gptPlayer:
         You play optimally and will occasionally bluff. You will raise when you have a strong hand. 
         You will only go All-in if you have a very strong hand. You will fold if you think your opponent has a better hand. 
         And will call and check where appropriate. 
-        Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your explanation for your action"}}
+        Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your explanation for your action", "what you think your opponent has": "your explanation for what you think your opponent has"}}
         Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
         '''
         system_message_prompt = SystemMessagePromptTemplate.from_template(template)

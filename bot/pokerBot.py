@@ -8,7 +8,7 @@ from bot.GPTplayer import gptPlayer
 
 
 class DiscordPokerManager:
-    def __init__(self, ctx, pokerGame: PokerGameManager, db: DatabaseManager, timeout: float):
+    def __init__(self, ctx, pokerGame: PokerGameManager, db: DatabaseManager, small_cards: bool, timeout: float):
         self.ctx = ctx
         self.pokerGame = pokerGame
         self.db = db
@@ -24,9 +24,9 @@ class DiscordPokerManager:
         self.pokerGame.round = "preFlop"
         self.pokerGame.reset_betting()
         await self.ctx.send("**Your Cards:**")
-        await self.ctx.send(get_cards(self.pokerGame.players[0].return_hand(), self.pokerGame.small_cards))
+        await self.ctx.send(get_cards(self.pokerGame.players[0].return_hand(), self.small_cards))
         print(self.pokerGame.players[0].player_name, self.pokerGame.players[0].return_hand(), self.pokerGame.players[1].return_hand())
-        if self.pokerGame.small_cards == True:
+        if self.small_cards == True:
             print("small cards")
         if self.pokerGame.button == 0:
             # Player can't cover small blind
@@ -128,7 +128,7 @@ class DiscordPokerManager:
             
         # Announce the community cards
         await self.ctx.send(f"**Community Cards ({round_name.capitalize()}):**")
-        await self.ctx.send(get_cards(self.pokerGame.board, self.pokerGame.small_cards))
+        await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
 
         # Announce the current pot
         await self.ctx.send(f"**Main pot:** {self.pokerGame.current_pot} chips.")
@@ -152,17 +152,17 @@ class DiscordPokerManager:
         
         # Display the community cards
         await self.ctx.send("**Community Cards:**")
-        await self.ctx.send(get_cards(self.pokerGame.board, self.pokerGame.small_cards))
+        await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
         
         self.pokerGame.evaluate_hands()
         
         # Display each player's hand and hand rank
         for player in self.pokerGame.players:
             await self.ctx.send(f"{player.player_name} has:")
-            await self.ctx.send(get_cards(player.return_hand(), self.pokerGame.small_cards))
+            await self.ctx.send(get_cards(player.return_hand(), self.small_cards))
             
             await self.ctx.send(f"**{player.hand_rank}**")
-            await self.ctx.send(get_cards(player.hand_played, self.pokerGame.small_cards))
+            await self.ctx.send(get_cards(player.hand_played, self.small_cards))
 
         # Determine the winner(s) and handle the pot
         winner = self.pokerGame.determine_winner()
