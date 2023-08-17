@@ -16,5 +16,7 @@ try:
     DB_PASSWORD = os.getenv('DB_PASSWORD')
 
     DB_DATABASE = os.getenv('DB_NAME')
+    DATABASE_EXISTS = True
 except:
     DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE = None, None, None, None
+    DATABASE_EXISTS = False

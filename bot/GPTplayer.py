@@ -11,9 +11,8 @@ from langchain.prompts.chat import (
 from langchain.memory import ConversationSummaryMemory
 from config.config import API_KEY
 from game.poker import PokerGameManager
+from db.db_utils import DatabaseManager
 import json
-
-
 
 
 # Define the SUMMARY_PROMPT template
@@ -33,10 +32,10 @@ SUMMARY_PROMPT = PromptTemplate(
     template=SUMMARY_PROMPT_TEMPLATE
 )
 
-
 class gptPlayer:
-    def __init__(self):
-        llm = ChatOpenAI(model_name="gpt-3.5-turbo")
+    def __init__(self, db: DatabaseManager, model_name="gpt-4", memory=False, verbose=False):
+        self.db = db
+        llm = ChatOpenAI(model_name=model_name)
         template = '''
         You are a proffesional poker bot who is playing a game of heads up Texas Hold'em aginst a human player. 
         You play optimally and will occasionally bluff. You will raise when you have a strong hand. 
@@ -46,20 +45,24 @@ class gptPlayer:
         Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
         '''
         system_message_prompt = SystemMessagePromptTemplate.from_template(template)
-        mesage_placeholder = MessagesPlaceholder(variable_name="chat_history")
         human_message_prompt = HumanMessagePromptTemplate.from_template("{input}")
-        chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, mesage_placeholder, human_message_prompt])
 
-        memory = ConversationSummaryMemory(
-            ai_prefix="PokerGPT", 
-            llm=OpenAI(temperature=0, verbose=True), 
-            prompt=SUMMARY_PROMPT,
-            return_messages=True,
-            memory_key="chat_history")
+        if memory:
+            mesage_placeholder = MessagesPlaceholder(variable_name="chat_history")
+            chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, mesage_placeholder, human_message_prompt])
             
+            chat_memory = ConversationSummaryMemory(
+                ai_prefix="PokerGPT", 
+                llm=OpenAI(temperature=0), 
+                prompt=SUMMARY_PROMPT,
+                return_messages=True,
+                memory_key="chat_history")
 
+            self.chain = LLMChain(llm=llm, prompt=chat_prompt, memory=chat_memory, verbose=verbose)
+        else:
+            chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
 
-        self.chain = LLMChain(llm=llm, prompt=chat_prompt, memory=memory, verbose=True)
+            self.chain = LLMChain(llm=llm, prompt=chat_prompt, verbose=verbose)
         
     def _extract_action(self, json_string, pokerGame: PokerGameManager):
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
@@ -67,6 +70,7 @@ class gptPlayer:
         try:
             json_data = json.loads(json_string)
             action = json_data['action'].capitalize()
+            print("action, ", action)
             raise_amount = 0
             if action == "Raise":
                 raise_amount = json_data['raise_amount']
@@ -79,8 +83,8 @@ class gptPlayer:
                 elif raise_amount > max_raise:
                     print("Raise amount too large, raising all-in")
                     action = "All-in"
-                    raise_amount = pokerGame.players[1].stack
-            
+                    raise_amount = pokerGame.return_player_stack(1)
+            self.db.record_gpt_action(action, raise_amount, json_string)
             return (action, raise_amount)
         except Exception as erro:
             print(erro)
@@ -93,8 +97,8 @@ class gptPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
+            'stack': pokerGame.return_player_stack(1),
+            'opponents_stack': pokerGame.return_player_stack(0),
             'hand': pokerGame.players[1].return_long_hand(),
             'pot': pokerGame.current_pot,
             'amount_to_call': pokerGame.big_blind - pokerGame.small_blind
@@ -118,8 +122,8 @@ class gptPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
+            'stack': pokerGame.return_player_stack(1),
+            'opponents_stack': pokerGame.return_player_stack(0),
             'hand': pokerGame.players[1].return_long_hand(),
             'pot': pokerGame.current_pot,
             'amount_to_call': pokerGame.big_blind - pokerGame.small_blind
@@ -143,8 +147,8 @@ class gptPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
+            'stack': pokerGame.return_player_stack(1),
+            'opponents_stack': pokerGame.return_player_stack(0),
             'hand': pokerGame.players[1].return_long_hand(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
@@ -168,8 +172,8 @@ class gptPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
+            'stack': pokerGame.return_player_stack(1),
+            'opponents_stack': pokerGame.return_player_stack(0),
             'hand': pokerGame.players[1].return_long_hand(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
@@ -194,8 +198,8 @@ class gptPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
+            'stack': pokerGame.return_player_stack(1),
+            'opponents_stack': pokerGame.return_player_stack(0),
             'hand': pokerGame.players[1].return_long_hand(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
@@ -222,12 +226,12 @@ class gptPlayer:
     def player_all_in(self, pokerGame: PokerGameManager):
         # return Call, or Fold
         amount_to_call = pokerGame.current_bet - pokerGame.players[1].round_pot_commitment
-        if amount_to_call > pokerGame.players[1].stack:
-            amount_to_call = pokerGame.players[1].stack
+        if amount_to_call > pokerGame.return_player_stack(1):
+            amount_to_call = pokerGame.return_player_stack(1)
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
+            'stack': pokerGame.return_player_stack(1),
             'hand': pokerGame.players[1].return_long_hand(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
