@@ -26,6 +26,18 @@ class Dealer:
         for _ in range(num_cards - len(self.board)):
             self.board.append(self.deck.deal_card())
     
+    # returns the player's stack
+    def return_player_stack(self, player: int):
+        return self.players[player].stack
+            
+    # returns the player's hand as a list
+    def return_player_hand(self, player: int):
+        return self.players[player].return_hand()
+
+    # returns the player's hand as a str
+    def return_player_hand_str(self, player: int):
+        return (", ".join(map(str, self.players[player].return_hand())))
+    
     # returns the board as a string
     def return_community_cards(self):
         return(", ".join(map(str, self.board)))
@@ -37,8 +49,8 @@ class Dealer:
 
         # Get all cards
         all_cards = self.board.copy()
-        all_cards.append(player.card1) # type: ignore
-        all_cards.append(player.card2) # type: ignore
+        all_cards.append(player.card1)
+        all_cards.append(player.card2)
 
         # Sort cards by rank
         all_cards.sort(reverse=True)
@@ -73,8 +85,8 @@ class Dealer:
                                     # considers edge case of ace low straight
                                     if (suit_cards[i] == Rank.ACE and suit_cards[j] == Rank.FIVE and suit_cards[k] == Rank.FOUR and 
                                         suit_cards[l] == Rank.THREE and suit_cards[m] == Rank.TWO):
-                                        if Rank.FIVE.value > highest_straight_rank: # type: ignore
-                                            highest_straight_rank = Rank.FIVE.value # type: ignore
+                                        if Rank.FIVE.value > highest_straight_rank:
+                                            highest_straight_rank = Rank.FIVE.value
                                             hand_rank = handRank.STRAIGHT_FLUSH
                                             hand_played = [suit_cards[j], suit_cards[k], suit_cards[l], suit_cards[m], suit_cards[i]]
         if highest_straight_rank != -1:
@@ -142,7 +154,7 @@ class Dealer:
                             # considers edge case of ace low straight
                             if (all_cards[i] == Rank.ACE and all_cards[j] == Rank.FIVE and all_cards[k] == Rank.FOUR and 
                                 all_cards[l] == Rank.THREE and all_cards[m] == Rank.TWO):
-                                highest_straight_rank = Rank.FIVE.value # type: ignore
+                                highest_straight_rank = Rank.FIVE.value
                                 hand_rank = handRank.STRAIGHT
                                 hand_played = [all_cards[j], all_cards[k], all_cards[l], all_cards[m], all_cards[i]]
 
@@ -217,7 +229,7 @@ class Dealer:
     # evaluate the hands of all players
     def evaluate_hands(self):
         for player in self.players:
-            player.hand_rank, player.hand_played = self.get_hand_rank(player) # type: ignore
+            player.hand_rank, player.hand_played = self.get_hand_rank(player)
     
     # return the winner of the hand and consider tiebreakers
     def determine_winner(self):
@@ -252,6 +264,7 @@ class Dealer:
 class PokerGameManager(Dealer):
     def __init__(self, buy_in: int = 1000, small_blind: int = 5, big_blind: int = 10):
         super().__init__(2, buy_in)
+        self.starting_stack = buy_in
         self.small_blind = small_blind
         self.big_blind = big_blind
         self.button = 0
