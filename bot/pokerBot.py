@@ -184,6 +184,7 @@ class DiscordPokerManager:
         # Check if either player is out of chips
         self.db_manager.update_community_cards(self.pokerGame.return_community_cards())
         self.db_manager.end_hand(self.pokerGame.return_player_stack(0), 'showdown')
+        self.db_manager.end_game(self.pokerGame.return_player_stack(0))
         embed = discord.Embed(title="Results")
         embed.add_field(name="ChatGPT", value=str(self.pokerGame.return_player_stack(1)))
         embed.add_field(name=self.ctx.author.name, value=str(self.pokerGame.return_player_stack(0)))
