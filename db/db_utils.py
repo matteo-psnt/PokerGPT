@@ -1,3 +1,4 @@
+import datetime
 import mysql.connector
 from config.config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE, DATABASE_EXISTS
 
@@ -87,6 +88,13 @@ class DatabaseManager:
             )
             data = (self.server_id, self.user_id)
             self.cursor.execute(add_user_server_stmt, data)
+            self.cnx.commit()
+            
+            update_server_players_stmt = (
+                "UPDATE servers SET total_players = total_players + 1 "
+                "WHERE id = %s"
+            )
+            self.cursor.execute(update_server_players_stmt, (self.server_id,))
             self.cnx.commit()
     
     def _update_nickname(self):
@@ -181,12 +189,41 @@ class DatabaseManager:
         elif net_bb == 0:
             result = 'draw'
         
+        # Get the start timestamp of the game
+        get_game_start_time_stmt = (
+            "SELECT timestamp FROM games WHERE id = %s"
+        )
+        self.cursor.execute(get_game_start_time_stmt, (self.game_id,))
+        start_time = self.cursor.fetchone()[0]
+        
+        # Calculate the time difference in seconds between start and end of the game
+        time_diff = (datetime.datetime.now() - start_time).total_seconds()
+        
         update_game_stmt = (
             "UPDATE games SET end_timestamp = NOW(), ending_stack = %s, net_bb = %s, result = %s "
             "WHERE id = %s"
         )
         data = (ending_stack, net_bb, result, self.game_id)
         self.cursor.execute(update_game_stmt, data)
+        
+        # Update the user's total_time_played
+        update_user_time_spent_stmt = (
+            "UPDATE users SET total_time_played = total_time_played + %s WHERE id = %s"
+        )
+        self.cursor.execute(update_user_time_spent_stmt, (time_diff, self.user_id))
+        
+        # Update the server's total_time_played
+        update_server_time_spent_stmt = (
+            "UPDATE servers SET total_time_played = total_time_played + %s WHERE id = %s"
+        )
+        self.cursor.execute(update_server_time_spent_stmt, (time_diff, self.server_id))
+        
+        # Update the total games played by the user
+        update_user_games_stmt = (
+            "UPDATE users SET total_games = total_games + 1 WHERE id = %s"
+        )
+        self.cursor.execute(update_user_games_stmt, (self.user_id,))
+        
         self.cnx.commit()
     
     def _update_wins(self, net_bb_wins):
@@ -300,8 +337,71 @@ class DatabaseManager:
         data = (self.user_id, self.game_id, self.hand_id, action_type, raise_amount, json_data)
         self.cursor.execute(insert_stmt, data)
         self.cnx.commit()
- 
-    def close(self, exc_type, exc_value, traceback):
+    
+    def get_top_players(self, limit=10):
+        top_players_query = (
+            "SELECT username, net_bb_total FROM users "
+            "ORDER BY net_bb_total DESC "
+            "LIMIT %s"
+        )
+        self.cursor.execute(top_players_query, (limit,))
+        return self.cursor.fetchall()
+    
+    def get_user_stats(self):
+        user_stats_query = (
+            "SELECT username, net_bb_total FROM users "
+            "WHERE discord_id = %s"
+        )
+        self.cursor.execute(user_stats_query, (self.discord_id,))
+        return self.cursor.fetchone()
+
+    def get_user_place(self):
+        get_user_place_query = (
+            "SELECT COUNT(*) + 1 "
+            "FROM users "
+            "WHERE net_bb_total > (SELECT net_bb_total FROM users WHERE discord_id = %s)"
+        )
+        self.cursor.execute(get_user_place_query, (self.discord_id,))
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        return None
+    
+    def get_user_stats_by_username(self, username):
+        user_stats_query = "SELECT total_hands, total_games, total_wins, total_losses, total_draws, " \
+                           "highest_win_streak, current_win_streak, highest_loss_streak, current_loss_streak, " \
+                           "net_bb_wins, net_bb_losses, net_bb_total " \
+                           "FROM users " \
+                           "WHERE username = %s"
+        self.cursor.execute(user_stats_query, (username,))
+        user_stats = self.cursor.fetchone()
+        return user_stats
+    
+    def get_top_servers(self, limit=10):
+        top_servers_query = "SELECT server_name, net_bb_wins FROM servers ORDER BY net_bb_wins DESC LIMIT %s;"
+        self.cursor.execute(top_servers_query, (limit,))
+        return self.cursor.fetchall()
+
+    def get_server_stats(self):
+        server_stats_query = "SELECT net_bb_wins, total_hands, total_wins, total_losses, total_draws, net_bb_total FROM servers WHERE host_id = %s;"
+        self.cursor.execute(server_stats_query, (self.host_id,))
+        return self.cursor.fetchone()
+    
+    def get_server_place(self):
+        server_place_query = (
+            "SELECT COUNT(*) + 1 "
+            "FROM servers "
+            "WHERE net_bb_wins > (SELECT net_bb_wins FROM servers WHERE host_id = %s)"
+        )        
+        self.cursor.execute(server_place_query, (self.host_id,))
+        return self.cursor.fetchone()[0]
+    
+    def get_server_stats_by_name(self, server_name):
+        server_stats_query = "SELECT net_bb_wins, total_hands, total_wins, total_losses, total_draws, net_bb_total FROM servers WHERE server_name = %s;"
+        self.cursor.execute(server_stats_query, (server_name,))
+        return self.cursor.fetchone()
+
+    def close(self):
         if DATABASE_EXISTS:
             self.cursor.close()
             self.cnx.close()

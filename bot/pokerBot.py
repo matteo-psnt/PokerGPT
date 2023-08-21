@@ -8,18 +8,18 @@ from bot.GPTplayer import gptPlayer
 
 
 class DiscordPokerManager:
-    def __init__(self, ctx, pokerGame: PokerGameManager, db: DatabaseManager, small_cards: bool, timeout: float):
+    def __init__(self, ctx, pokerGame: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float):
         self.ctx = ctx
         self.pokerGame = pokerGame
-        self.db = db
+        self.db_manager = db_manager
         self.small_cards = small_cards
         self.timeout = timeout
-        db.initialize_game(pokerGame.small_blind, pokerGame.big_blind, pokerGame.starting_stack)
+        db_manager.initialize_game(pokerGame.small_blind, pokerGame.big_blind, pokerGame.starting_stack)
 
     async def play_round(self):
         self.pokerGame.new_round()
-        self.gptAction = gptPlayer(self.db)
-        self.db.initialize_hand(self.pokerGame.return_player_hand_str(0), self.pokerGame.return_player_hand_str(1), self.pokerGame.return_player_stack(0))
+        self.gptAction = gptPlayer(self.db_manager)
+        self.db_manager.initialize_hand(self.pokerGame.return_player_hand_str(0), self.pokerGame.return_player_hand_str(1), self.pokerGame.return_player_stack(0))
         await self.pre_flop()
 
     async def pre_flop(self):
@@ -182,8 +182,8 @@ class DiscordPokerManager:
             await self.ctx.send(f"{winner.player_name} wins **{pot} chips** and has {winner.stack} chips.")
         
         # Check if either player is out of chips
-        self.db.update_community_cards(self.pokerGame.return_community_cards())
-        self.db.end_hand(self.pokerGame.return_player_stack(0), 'showdown')
+        self.db_manager.update_community_cards(self.pokerGame.return_community_cards())
+        self.db_manager.end_hand(self.pokerGame.return_player_stack(0), 'showdown')
         embed = discord.Embed(title="Results")
         embed.add_field(name="ChatGPT", value=str(self.pokerGame.return_player_stack(1)))
         embed.add_field(name=self.ctx.author.name, value=str(self.pokerGame.return_player_stack(0)))
@@ -356,8 +356,8 @@ class DiscordPokerManager:
             self.pokerGame.player_win(0)
             await self.ctx.send(f"You have {self.pokerGame.return_player_stack(0)} chips.")
             await self.ctx.send(f"ChatGPT has {self.pokerGame.return_player_stack(1)} chips.")
-        self.db.update_community_cards(self.pokerGame.return_community_cards())
-        self.db.end_hand(self.pokerGame.return_player_stack(0), self.pokerGame.round)
+        self.db_manager.update_community_cards(self.pokerGame.return_community_cards())
+        self.db_manager.end_hand(self.pokerGame.return_player_stack(0), self.pokerGame.round)
         await self.ctx.respond("Play another round?")
         await self.ctx.send("", view=self.newRoundView(self))
 
@@ -366,7 +366,7 @@ class DiscordPokerManager:
             super().__init__(title = "Raise", timeout = pokerManager.timeout)
             self.ctx = pokerManager.ctx
             self.pokerGame = pokerManager.pokerGame
-            self.db = pokerManager.db
+            self.db_manager = pokerManager.db_manager
             self.pokerManager = pokerManager
 
             self.add_item(InputText(label="Amount",
@@ -407,7 +407,7 @@ class DiscordPokerManager:
             self.responded = False
             self.ctx = pokerManager.ctx
             self.pokerGame = pokerManager.pokerGame
-            self.db = pokerManager.db
+            self.db_manager = pokerManager.db_manager
             self.pokerManager = pokerManager
 
         async def on_timeout(self):
@@ -458,7 +458,7 @@ class DiscordPokerManager:
             self.responded = False
             self.ctx = pokerManager.ctx
             self.pokerGame = pokerManager.pokerGame
-            self.db = pokerManager.db
+            self.db_manager = pokerManager.db_manager
             self.pokerManager = pokerManager
 
         async def on_timeout(self):
@@ -499,7 +499,7 @@ class DiscordPokerManager:
             self.responded = False
             self.ctx = pokerManager.ctx
             self.pokerGame = pokerManager.pokerGame
-            self.db = pokerManager.db
+            self.db_manager = pokerManager.db_manager
             self.pokerManager = pokerManager
 
         async def on_timeout(self):
@@ -535,12 +535,12 @@ class DiscordPokerManager:
             self.responded = False
             self.ctx = pokerManager.ctx
             self.pokerGame = pokerManager.pokerGame
-            self.db = pokerManager.db
+            self.db_manager = pokerManager.db_manager
             self.pokerManager = pokerManager
         
         async def on_timeout(self):
             if (self.responded == False):
-                self.db.end_game(self.pokerGame.return_player_stack(0))
+                self.db_manager.end_game(self.pokerGame.return_player_stack(0))
                 embed = discord.Embed(title="Results")
                 embed.add_field(name="ChatGPT", value=str(self.pokerGame.return_player_stack(1)))
                 embed.add_field(name=self.ctx.author.name, value=str(self.pokerGame.return_player_stack(0)))
@@ -563,7 +563,7 @@ class DiscordPokerManager:
         async def end_game_button_callback(self, button, interaction):
             if await self.check(interaction):
                 self.responded = True
-                self.db.end_game(self.pokerGame.return_player_stack(0))
+                self.db_manager.end_game(self.pokerGame.return_player_stack(0))
                 embed = discord.Embed(title="Results")
                 embed.add_field(name="ChatGPT", value=str(self.pokerGame.return_player_stack(1)))
                 embed.add_field(name=self.ctx.author.name, value=str(self.pokerGame.return_player_stack(0)))
