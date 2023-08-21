@@ -5,13 +5,15 @@ CREATE TABLE servers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     host_id VARCHAR(100),
     server_name VARCHAR(100),
+    total_players INT DEFAULT 0,
     total_hands INT DEFAULT 0,
+    total_time_played INT UNSIGNED DEFAULT 0,
     total_wins INT DEFAULT 0,
     total_losses INT DEFAULT 0,
     total_draws INT DEFAULT 0,
     net_bb_wins DECIMAL(10, 3) DEFAULT 0.000,
     net_bb_losses DECIMAL(10, 3) DEFAULT 0.000,
-    net_bb_total DECIMAL(10, 3) DEFAULT 0.000
+    net_bb_total DECIMAL(10, 3) DEFAULT 0.000,
 );
 
 CREATE TABLE users (
@@ -20,6 +22,7 @@ CREATE TABLE users (
     discord_id VARCHAR(100),
     total_hands INT UNSIGNED DEFAULT 0,
     total_games INT UNSIGNED DEFAULT 0,
+    total_time_played INT UNSIGNED DEFAULT 0,
     total_wins INT UNSIGNED DEFAULT 0,
     total_losses INT UNSIGNED DEFAULT 0,
     total_draws INT UNSIGNED DEFAULT 0,
@@ -29,7 +32,7 @@ CREATE TABLE users (
     current_loss_streak INT UNSIGNED DEFAULT 0,
     net_bb_wins DECIMAL(10, 3) DEFAULT 0.000,
     net_bb_losses DECIMAL(10, 3) DEFAULT 0.000,
-    net_bb_total DECIMAL(10, 3) DEFAULT 0.000
+    net_bb_total DECIMAL(10, 3) DEFAULT 0.000,
 );
 
 CREATE TABLE server_users (
