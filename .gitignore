@@ -5,3 +5,4 @@ __pycache__
 *.DS_Store
 run_bot_dev.py
 tests/GPTplayer_test.py
+db/db_injector.py
