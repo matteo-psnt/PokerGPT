@@ -6,7 +6,10 @@ API_KEY = str(os.getenv("OPENAI_API_KEY"))
 
 TOKEN = str(os.getenv("DISCORD_TOKEN"))
 
-DEV_TOKEN = str(os.getenv("DISCORD_DEV_TOKEN"))
+try:
+    DEV_TOKEN = str(os.getenv("DISCORD_DEV_TOKEN"))
+except:
+    DEV_TOKEN = None
 
 try:
     DB_HOST = os.getenv('DB_HOST')
