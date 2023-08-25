@@ -57,7 +57,7 @@ async def play_poker(ctx,
     
     db_manager = DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
     try:
-        discordHandler = DiscordPokerManager(ctx, pokerGame, db_manager, small_cards, timeout)
+        discordHandler = DiscordPokerManager(ctx, pokerGame, db_manager, small_cards, timeout, model_name="gpt-3.5-turbo", memory=False)
         await discordHandler.play_round()
     finally:
         db_manager.close

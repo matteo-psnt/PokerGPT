@@ -8,17 +8,33 @@ from bot.GPTplayer import gptPlayer
 
 
 class DiscordPokerManager:
-    def __init__(self, ctx, pokerGame: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float):
+    def __init__(
+        self,
+        ctx,
+        pokerGame: PokerGameManager,
+        db_manager: DatabaseManager,
+        small_cards: bool,
+        timeout: float,
+        model_name: str = "gpt-3.5-turbo",
+        memory: bool = False
+    ):
         self.ctx = ctx
         self.pokerGame = pokerGame
         self.db_manager = db_manager
         self.small_cards = small_cards
         self.timeout = timeout
-        db_manager.initialize_game(pokerGame.small_blind, pokerGame.big_blind, pokerGame.starting_stack)
+        self.model_name = model_name
+        self.memory = memory
+        
+        db_manager.initialize_game(
+            pokerGame.small_blind,
+            pokerGame.big_blind,
+            pokerGame.starting_stack
+        )
 
     async def play_round(self):
         self.pokerGame.new_round()
-        self.gptAction = gptPlayer(self.db_manager)
+        self.gptAction = gptPlayer(self.db_manager, model_name=self.model_name, memory=self.memory)
         self.db_manager.initialize_hand(self.pokerGame.return_player_hand_str(0), self.pokerGame.return_player_hand_str(1), self.pokerGame.return_player_stack(0))
         await self.pre_flop()
 

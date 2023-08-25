@@ -33,7 +33,7 @@ SUMMARY_PROMPT = PromptTemplate(
 )
 
 class gptPlayer:
-    def __init__(self, db: DatabaseManager, model_name="gpt-4", memory=False, verbose=False):
+    def __init__(self, db: DatabaseManager, model_name="gpt-3.5-turbo", memory=False, verbose=False):
         self.db = db
         llm = ChatOpenAI(model_name=model_name)
         template = '''
