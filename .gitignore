@@ -6,3 +6,5 @@ __pycache__
 run_bot_dev.py
 tests/GPTplayer_test.py
 db/db_injector.py
+deleat_inject_users.py
+inject_users.py

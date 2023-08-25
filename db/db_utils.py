@@ -347,18 +347,21 @@ class DatabaseManager:
         self.cursor.execute(top_players_query, (limit,))
         return self.cursor.fetchall()
     
-    def get_user_stats(self):
+    def get_user_stats_of_player(self):
         user_stats_query = (
-            "SELECT username, net_bb_total FROM users "
-            "WHERE discord_id = %s"
+            "SELECT total_hands, total_games, total_time_played, "
+            "net_bb_total, net_bb_wins, net_bb_losses, "
+            "total_wins, total_losses, total_draws, "
+            "highest_win_streak, highest_loss_streak "
+            "FROM users WHERE discord_id = %s"
         )
+        
         self.cursor.execute(user_stats_query, (self.discord_id,))
         return self.cursor.fetchone()
 
     def get_user_place(self):
         get_user_place_query = (
-            "SELECT COUNT(*) + 1 "
-            "FROM users "
+            "SELECT COUNT(*) + 1 FROM users "
             "WHERE net_bb_total > (SELECT net_bb_total FROM users WHERE discord_id = %s)"
         )
         self.cursor.execute(get_user_place_query, (self.discord_id,))
@@ -368,22 +371,30 @@ class DatabaseManager:
         return None
     
     def get_user_stats_by_username(self, username):
-        user_stats_query = "SELECT total_hands, total_games, total_wins, total_losses, total_draws, " \
-                           "highest_win_streak, current_win_streak, highest_loss_streak, current_loss_streak, " \
-                           "net_bb_wins, net_bb_losses, net_bb_total " \
-                           "FROM users " \
-                           "WHERE username = %s"
+        user_stats_query = (
+            "SELECT total_hands, total_games, total_time_played, "
+            "net_bb_total, net_bb_wins, net_bb_losses, "
+            "total_wins, total_losses, total_draws, "
+            "highest_win_streak, highest_loss_streak "
+            "FROM users WHERE username = %s"
+        )
         self.cursor.execute(user_stats_query, (username,))
-        user_stats = self.cursor.fetchone()
-        return user_stats
+        return self.cursor.fetchone()
     
     def get_top_servers(self, limit=10):
-        top_servers_query = "SELECT server_name, net_bb_wins FROM servers ORDER BY net_bb_wins DESC LIMIT %s;"
+        top_servers_query = (
+            "SELECT server_name, net_bb_wins "
+            "FROM servers ORDER BY net_bb_wins DESC LIMIT %s;")
         self.cursor.execute(top_servers_query, (limit,))
         return self.cursor.fetchall()
 
     def get_server_stats(self):
-        server_stats_query = "SELECT net_bb_wins, total_hands, total_wins, total_losses, total_draws, net_bb_total FROM servers WHERE host_id = %s;"
+        server_stats_query = (
+            "SELECT total_players, total_hands, total_time_played, "
+            "net_bb_total, net_bb_wins, net_bb_losses, "
+            "total_wins, total_losses, total_draws "
+            "FROM servers WHERE host_id = %s;"
+        )
         self.cursor.execute(server_stats_query, (self.host_id,))
         return self.cursor.fetchone()
     
@@ -397,7 +408,12 @@ class DatabaseManager:
         return self.cursor.fetchone()[0]
     
     def get_server_stats_by_name(self, server_name):
-        server_stats_query = "SELECT net_bb_wins, total_hands, total_wins, total_losses, total_draws, net_bb_total FROM servers WHERE server_name = %s;"
+        server_stats_query = (
+            "SELECT total_players, total_hands, total_time_played, "
+            "net_bb_total, net_bb_wins, net_bb_losses, "
+            "total_wins, total_losses, total_draws "
+            "FROM servers WHERE server_name = %s;"
+        )
         self.cursor.execute(server_stats_query, (server_name,))
         return self.cursor.fetchone()
 
