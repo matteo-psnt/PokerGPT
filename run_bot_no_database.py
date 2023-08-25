@@ -11,6 +11,7 @@ bot = discord.Bot()
 
 @bot.event
 async def on_ready():
+    await bot.change_presence(activity=discord.Game(name="/play_poker"))
     print(f"I have logged in as {bot.user}")
 
 @bot.event
