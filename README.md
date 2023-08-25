@@ -3,30 +3,56 @@
 Welcome to the Poker Discord Bot powered by ChatGPT! This bot allows you to play a virtual game of Texas Hold'em poker with your friends right in your Discord server. The bot utilizes the ChatGPT-4 language model developed by OpenAI to provide an interactive and dynamic poker experience. The bot handles all aspects of the game, including dealing cards, managing bets, and determining winners. The bot also incorporates error handling to ensure a smooth user experience. To use the bot in your Discord server, either host the bot yourself using the setup instructions below or use the recomended method and invite the bot to your server using the generated invite link.
 ## Features
 
-- **Multiplayer Poker**: Play Texas Hold'em poker with multiple players in your Discord server.
-- **Intelligent Chat**: Interact with the ChatGPT-4 language model to have realistic conversations and gameplay guidance.
+- **Realistic Gameplay**: Play with realistic poker rules, including betting, folding, and raising.
+- **Quick startup**: Start a game of Texas Hold'em poker in seconds using the `/play_poker` command.
+- **Player Statistics**: View player and server statistics, including win rate, total winnings, and more.
 - **Dynamic Gameplay**: The bot handles all aspects of the game, including dealing cards, managing bets, and determining winners.
-- **Easy-to-Use Command**: Start a game of Texas Hold'em using the `/play_poker` command.
-- **Customizable Settings**: Adjust various game settings such as starting chips, blind levels, and move timeout.
+- **Error Handling**: The bot incorporates error handling to ensure a smooth user experience.
+- **Quick Response Times**: The bot responds to user input within seconds.
 
 ## Commands
-
-To start a game of Texas Hold'em poker, use the following command:
-
-`/play_poker [small-blind] [big-blind] [timeout] [small-cards]`
-
-- `small-blind` (optional): Set the small blind amount (default: 5, minimum: 1).
-- `big-blind` (optional): Set the big blind amount (default: 10, minimum: 2).
-- `timeout` (optional): Set the number of seconds allowed to make a move (default: 30, minimum: 5, maximum: 180).
-- `small-cards` (optional): Use small cards (default: False).
-
----
 
 To get information about the bot, use the following command:
 
 `/info`
 
+---
 
+To start a game of Texas Hold'em poker, use the following command:
+
+`/play_poker [small-blind] [big-blind] [small-cards]`
+
+- `small-blind` (optional): Set the small blind amount (default: 5, minimum: 1).
+- `big-blind` (optional): Set the big blind amount (default: 10, minimum: 2).
+- `small-cards` (optional): Use small cards (default: False).
+
+---
+
+To view the leaderboard for all players, use the following command:
+
+`/player_leaderboard`
+
+---
+
+To view player statistics, use the following command:
+
+`/player_stats [username]`
+
+- `username` (optional): Chose user to view statistics for (default: yourself).
+
+---
+
+To view the leaderboard for all servers, use the following command:
+
+`/server_leaderboard`
+
+---
+
+To view server statistics, use the following command:
+
+`/server_stats [server]`
+
+- `server` (optional): Chose server to view statistics for (default: current server).
 
 ## Setup
 
@@ -45,7 +71,7 @@ OPENAI_API_KEY=your_openai_api_key
 
 6. Replace `your_discord_bot_token` with your Discord bot token.
 7. Replace `your_openai_api_key` with your OpenAI API key.
-8. (Optional) If you want to change the model used, open the `bot/GPTplayer.py` file and replace the model from GPT-4 to GPT-3.5-turbo. This can provide faster response times and cost efficiency.
+8. (Optional) If you want to change the model used, open the `run_bot.py` file and update the model_name variable.
 9.  Run the bot script on your preferred hosting environment.
 10. To host the card images, create a new Discord server.
 11. Add the bot to the server where you want to host the images.
