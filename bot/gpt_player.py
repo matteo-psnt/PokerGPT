@@ -66,29 +66,23 @@ class GPTPlayer:
         
     def _extract_action(self, json_string, pokerGame: PokerGameManager):
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
-        print(json_string)
         try:
             json_data = json.loads(json_string)
             action = json_data['action'].capitalize()
-            print("action, ", action)
             raise_amount = 0
             if action == "Raise":
                 raise_amount = json_data['raise_amount']
                 raise_amount = int(raise_amount)
                 
                 if raise_amount < min_raise:
-                    print("Raise amount too small, raising to minimum")
                     raise_amount = min_raise
 
                 elif raise_amount > max_raise:
-                    print("Raise amount too large, raising all-in")
                     action = "All-in"
                     raise_amount = pokerGame.return_player_stack(1)
             self.db.record_gpt_action(action, raise_amount, json_string)
             return (action, raise_amount)
         except Exception as erro:
-            print(erro)
-            print("Returning default action")
             return ("Default", 0)
 
 

@@ -2,7 +2,7 @@ import logging
 import discord
 from discord import ButtonStyle, Interaction
 from discord.ui import InputText, View
-from gpt_player import GPTPlayer
+from bot.gpt_player import GPTPlayer
 from bot.card_display import get_cards
 from db.db_utils import DatabaseManager
 from game.poker import PokerGameManager

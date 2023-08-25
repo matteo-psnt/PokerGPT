@@ -5,7 +5,7 @@ from game.poker import PokerGameManager
 from bot.card_display import *
 from config.config import TOKEN
 from db.db_utils import DatabaseManager
-from bot_poker_handler import DiscordPokerManager
+from bot.bot_poker_handler import DiscordPokerManager
 import logging
 
 logging.basicConfig(
