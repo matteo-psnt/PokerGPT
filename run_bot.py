@@ -2,30 +2,38 @@ import discord
 from discord import Option
 from discord.ui import View, Button
 import datetime
+import logging
 from game.poker import PokerGameManager
 from bot.card_display import *
 from config.config import TOKEN
 from db.db_utils import DatabaseManager
-from bot.pokerBot import DiscordPokerManager
+from bot_poker_handler import DiscordPokerManager
+
+logging.basicConfig(
+    filename='bot.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 bot = discord.Bot()
 
 @bot.event
 async def on_ready():
     await bot.change_presence(activity=discord.Game(name="/play_poker"))
+    logging.info(f"I have logged in as {bot.user}")
     print(f"I have logged in as {bot.user}")
 
 @bot.event
 async def on_guild_join(guild):
-    print(f"The bot has been added to the server: {guild.name}")
+    logging.info(f"The bot has been added to the server: {guild.name}")
 
 @bot.event
 async def on_guild_remove(guild):
-    print(f"The bot has been kicked from the server: {guild.name}")
+    logging.info(f"The bot has been removed from the server: {guild.name}")
 
 @bot.slash_command(name="info", description="Information about the bot")
 async def name(ctx):
-    print("info")
+    logging.info(f"{ctx.author.name} requested bot info.")
     view = View()
     view.add_item(Button(label="Add to Server", url="https://discord.com/oauth2/authorize?client_id=1102638957713432708&permissions=277025773568&scope=bot%20applications.commands"))
     view.add_item(Button(label="Heads Up Texas Hold'em Rules", style=discord.ButtonStyle.url, url="https://www.wikihow.com/Heads-Up-Poker"))
@@ -40,6 +48,10 @@ async def play_poker(ctx,
                      big_blind:     Option(int, name="big-blind", description="Set big blind", default=10, min_value=1),
                      small_cards:   Option(bool, name="small-cards", description="Use smaller card images", default=False)):
     
+    logging.info(f"{ctx.author.name} started a poker game with {small_blind} small blind and {big_blind} big blind")
+    if small_cards:
+        logging.info(f"{ctx.author.name} is using small cards")
+    
     if (small_blind > big_blind):
         await ctx.respond("Small blind must be less than the big blind.")
         return
@@ -47,17 +59,17 @@ async def play_poker(ctx,
     timeout = 45
     buy_in = 100 * big_blind
     
-    await ctx.respond("Starting a game of poker against chatGPT.")
+    await ctx.respond("Starting a game of poker against PokerGPT.")
     await ctx.send(f"Both players start with {buy_in} chips.")
     await ctx.send(f"The small blind is {small_blind} chips and the big blind is {big_blind} chips.")
     pokerGame = PokerGameManager(buy_in, small_blind, big_blind)
     pokerGame.set_player_name(0, ctx.author.name)
-    pokerGame.set_player_name(1, "chatGPT")
+    pokerGame.set_player_name(1, "PokerGPT")
     pokerGame.new_round()
     
     db_manager = DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
     try:
-        discordHandler = DiscordPokerManager(ctx, pokerGame, db_manager, small_cards, timeout, model_name="gpt-3.5-turbo", memory=False)
+        discordHandler = DiscordPokerManager(ctx, pokerGame, db_manager, small_cards, timeout)
         await discordHandler.play_round()
     finally:
         db_manager.close
@@ -65,6 +77,7 @@ async def play_poker(ctx,
 
 @bot.slash_command(name="player_leaderboard", description="Leaderbord of the top 10 players by total wins against PokerGPT.")
 async def player_leaderboard(ctx):
+    logging.info(f"{ctx.author.name} requested the player leaderboard.")
     db_manager = DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
     try:
         top_players = db_manager.get_top_players()
@@ -95,11 +108,11 @@ async def player_leaderboard(ctx):
 
 
 @bot.slash_command(name="player_stats", description="Get PokerGPT statistics about yourself or another player.")
-async def player_stats(ctx,
-                username: Option(str, name="username", description="Username of the player to get stats for", default="Yourself")):
+async def player_stats(ctx, username: Option(str, name="username", description="Username of the player to get stats for", default="self")):
+    logging.info(f"{ctx.author.name} requested player stats for {username}.")
     db_manager = DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
     try:
-        if username == "Yourself":
+        if username == "self":
             user_stats = db_manager.get_user_stats_of_player()
             username = ctx.author.name
         else:
@@ -135,6 +148,7 @@ async def player_stats(ctx,
 
 @bot.slash_command(name="server_leaderboard", description="Leaderbord of the top 10 servers by wins against PokerGPT.")
 async def server_leaderboard(ctx):
+    logging.info(f"{ctx.author.name} requested the server leaderboard.")
     db_manager = DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
     try:
         top_servers = db_manager.get_top_servers()
@@ -165,11 +179,11 @@ async def server_leaderboard(ctx):
 
 
 @bot.slash_command(name="server_stats", description="Get PokerGPT statistics about a server.")
-async def server_stats(ctx,
-                       server_name: Option(str, name="server_name", description="Name of the server to get stats for", default="Your Server")):
+async def server_stats(ctx, server_name: Option(str, name="server_name", description="Name of the server to get stats for", default="current server")):
+    logging.info(f"{ctx.author.name} requested server stats for {server_name}.")
     db_manager = DatabaseManager(ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
     try:
-        if server_name == "Your Server":
+        if server_name == "current server":
             server_stats = db_manager.get_server_stats()
         else:
             server_stats = db_manager.get_server_stats_by_name(server_name)

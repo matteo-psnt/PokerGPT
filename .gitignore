@@ -9,3 +9,4 @@ db/db_injector.py
 deleat_inject_users.py
 inject_users.py
 db/deleat_database.sql
+bot.log
