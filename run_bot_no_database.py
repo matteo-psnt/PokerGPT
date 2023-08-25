@@ -3,7 +3,7 @@ from discord import Option
 from discord.ui import View, Button
 from game.poker import PokerGameManager
 from bot.card_display import *
-from config.config import TOKEN
+from config.config import DEV_TOKEN as TOKEN
 from db.db_utils import DatabaseManager
 from bot.pokerBot import DiscordPokerManager
 
