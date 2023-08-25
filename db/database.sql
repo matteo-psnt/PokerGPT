@@ -1,5 +1,5 @@
--- Active: 1690312626673@@127.0.0.1@3306@pokerGPTdatabase
-CREATE DATABASE pokerGPTdatabase;
+-- Active: 1692934334823@@54.37.204.19@3306
+USE s105002_pokerGPTdatabase
 
 CREATE TABLE servers (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -13,7 +13,7 @@ CREATE TABLE servers (
     total_draws INT DEFAULT 0,
     net_bb_wins DECIMAL(10, 3) DEFAULT 0.000,
     net_bb_losses DECIMAL(10, 3) DEFAULT 0.000,
-    net_bb_total DECIMAL(10, 3) DEFAULT 0.000,
+    net_bb_total DECIMAL(10, 3) DEFAULT 0.000
 );
 
 CREATE TABLE users (
@@ -32,7 +32,7 @@ CREATE TABLE users (
     current_loss_streak INT UNSIGNED DEFAULT 0,
     net_bb_wins DECIMAL(10, 3) DEFAULT 0.000,
     net_bb_losses DECIMAL(10, 3) DEFAULT 0.000,
-    net_bb_total DECIMAL(10, 3) DEFAULT 0.000,
+    net_bb_total DECIMAL(10, 3) DEFAULT 0.000
 );
 
 CREATE TABLE server_users (
