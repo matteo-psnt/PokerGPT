@@ -411,7 +411,7 @@ class DiscordPokerManager:
                 amount_raised = int(amount_raised)
                 if (amount_raised == self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment):
                     await interaction.response.send_message("You are __All-in.__")
-                    await self.pokerManager.player_all_in()
+                    await self.pokerManager.user_all_in()
                     return
                 if (amount_raised > self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment):
                     await interaction.response.send_message("You do not have enough chips.")
@@ -425,10 +425,10 @@ class DiscordPokerManager:
                 if (amount_raised >= self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment):
                     opponent_stack = (self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment)
                     await interaction.response.edit_message(content=f"You put chat gpt __All-in for {opponent_stack} chips.__", view=None)
-                    await self.pokerManager.player_all_in()
+                    await self.pokerManager.user_all_in()
 
                 await interaction.response.edit_message(content=f"You __Raise to {amount_raised} chips.__", view=None)
-                await self.pokerManager.player_raise(amount_raised)
+                await self.pokerManager.user_raise(amount_raised)
 
     class callView(View):
         def __init__(self, pokerManager):
@@ -472,7 +472,7 @@ class DiscordPokerManager:
                 if self.message:
                     await self.message.edit(
                         content=f"You are __All In for {self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
-                await self.pokerManager.player_all_in()
+                await self.pokerManager.user_all_in()
 
         @discord.ui.button(label="Fold", style=ButtonStyle.red)
         async def fold_button_callback(self, button, interaction):
@@ -523,7 +523,7 @@ class DiscordPokerManager:
                 self.responded = True
                 if self.message:
                     await self.message.edit(content=f"You are __All-in for {self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
-                await self.pokerManager.player_all_in()
+                await self.pokerManager.user_all_in()
 
     class allInCallView(View):
         def __init__(self, pokerManager):
