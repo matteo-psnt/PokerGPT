@@ -197,8 +197,8 @@ class DatabaseManager:
         start_time = self.cursor.fetchone()[0]
         
         # Calculate the time difference in seconds between start and end of the game
-        time_diff = (datetime.datetime.now() - start_time).total_seconds()
-        
+        time_diff = round((datetime.datetime.now() - start_time).total_seconds())
+
         update_game_stmt = (
             "UPDATE games SET end_timestamp = NOW(), ending_stack = %s, net_bb = %s, result = %s "
             "WHERE id = %s"

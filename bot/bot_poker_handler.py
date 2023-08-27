@@ -193,11 +193,12 @@ class DiscordPokerManager:
         # Check if either player is out of chips
         self.db_manager.update_community_cards(self.pokerGame.return_community_cards())
         self.db_manager.end_hand(self.pokerGame.return_player_stack(0), "showdown")
-        self.db_manager.end_game(self.pokerGame.return_player_stack(0))
         embed = self.result_embed()
         if self.pokerGame.return_player_stack(0) == 0:
+            self.db_manager.end_game(self.pokerGame.return_player_stack(0))
             await self.ctx.send(f"{self.pokerGame.players[1].player_name} wins the game! {self.pokerGame.players[0].player_name} is out of chips.", embeds=[embed])
         elif self.pokerGame.return_player_stack(1) == 0:
+            self.db_manager.end_game(self.pokerGame.return_player_stack(0))
             await self.ctx.send(f"{self.pokerGame.players[0].player_name} wins the game! {self.pokerGame.players[1].player_name} is out of chips.", embeds=[embed])
         else:
             # Prompt to play another round
