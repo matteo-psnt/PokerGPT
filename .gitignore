@@ -9,5 +9,5 @@ db/db_injector.py
 deleat_inject_users.py
 inject_users.py
 inject_servers.py
-db/deleat_database.sql
+db/delete_database.sql
 bot.log
