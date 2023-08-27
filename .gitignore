@@ -8,5 +8,6 @@ tests/GPTplayer_test.py
 db/db_injector.py
 deleat_inject_users.py
 inject_users.py
+inject_servers.py
 db/deleat_database.sql
 bot.log
