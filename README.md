@@ -88,7 +88,7 @@ If you want to utilize the database features:
 1. Set up a MySQL server. If you don't have one, you can use services like [MySQL on AWS RDS](https://aws.amazon.com/rds/mysql/) or [MySQL on Azure](https://azure.microsoft.com/en-us/services/mysql/).
 2. Once your MySQL server is set up, execute the commands from the `db/database.sql` file to create the necessary database and tables.
    
-3. In the `.env` file, uncomment (remove the `"""` markers) and fill in the database configuration section:
+3. In the `.env` file, uncomment (remove the `#` markers) and fill in the database configuration section:
 
 ```plaintext
 DB_HOST=your_database_host
