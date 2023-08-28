@@ -1,38 +1,32 @@
 import discord
 from discord import Option
-from discord.ui import View, Button
-from game.poker import PokerGameManager
+from discord.ui import Button, View
+from bot.bot_poker_handler import DiscordPokerManager
 from bot.card_display import *
 from config.config import TOKEN
+from config.log_config import logger
 from db.db_utils import DatabaseManager
-from bot.bot_poker_handler import DiscordPokerManager
-import logging
-
-logging.basicConfig(
-    filename='bot.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+from game.poker import PokerGameManager
 
 bot = discord.Bot()
 
 @bot.event
 async def on_ready():
     await bot.change_presence(activity=discord.Game(name="/play_poker"))
-    logging.info(f"I have logged in as {bot.user}")
+    logger.info(f"I have logged in as {bot.user}")
     print(f"I have logged in as {bot.user}")
 
 @bot.event
 async def on_guild_join(guild):
-    logging.info(f"The bot has been added to the server: {guild.name}")
+    logger.info(f"The bot has been added to the server: {guild.name}")
 
 @bot.event
 async def on_guild_remove(guild):
-    logging.info(f"The bot has been removed from the server: {guild.name}")
+    logger.info(f"The bot has been removed from the server: {guild.name}")
 
 @bot.slash_command(name="info", description="Information about the bot")
 async def name(ctx):
-    logging.info(f"{ctx.author.name} requested bot info.")
+    logger.info(f"{ctx.author.name} requested bot info.")
     view = View()
     view.add_item(Button(label="Add to Server", url="https://discord.com/oauth2/authorize?client_id=1102638957713432708&permissions=277025773568&scope=bot%20applications.commands"))
     view.add_item(Button(label="Heads Up Texas Hold'em Rules", style=discord.ButtonStyle.url, url="https://www.wikihow.com/Heads-Up-Poker"))
@@ -46,9 +40,9 @@ async def play_poker(ctx,
                      small_blind:   Option(int, name="small-blind", description="Set small blind", default=5, min_value=1),
                      big_blind:     Option(int, name="big-blind", description="Set big blind", default=10, min_value=1),
                      small_cards:   Option(bool, name="small-cards", description="Use smaller card images", default=False)):
-    logging.info(f"{ctx.author.name} started a poker game with {small_blind} small blind and {big_blind} big blind")
+    logger.info(f"{ctx.author.name} started a poker game with {small_blind} small blind and {big_blind} big blind")
     if small_cards:
-        logging.info(f"{ctx.author.name} is using small cards")
+        logger.info(f"{ctx.author.name} is using small cards")
     if (small_blind > big_blind):
         await ctx.respond("Small blind must be less than the big blind.")
         return

@@ -11,3 +11,4 @@ inject_users.py
 inject_servers.py
 db/delete_database.sql
 bot.log
+discord.log

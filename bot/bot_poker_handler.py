@@ -1,9 +1,9 @@
-import logging
 import discord
 from discord import ButtonStyle, Interaction
 from discord.ui import InputText, View
-from bot.gpt_player import GPTPlayer
 from bot.card_display import get_cards
+from bot.gpt_player import GPTPlayer
+from config.log_config import logger
 from db.db_utils import DatabaseManager
 from game.poker import PokerGameManager
 
@@ -25,21 +25,21 @@ class DiscordPokerManager:
         self.pokerGame.new_round()
         self.gpt_action = GPTPlayer(self.db_manager, model_name=self.model_name, memory=self.memory)
         self.db_manager.initialize_hand(self.pokerGame.return_player_hand_str(0), self.pokerGame.return_player_hand_str(1), self.pokerGame.return_player_stack(0))
-        logging.info(f"{self.ctx.author.name} - Starting a new round.")
-        logging.info(f"{self.ctx.author.name} - Player has {self.pokerGame.return_player_stack(0)} chips, PokerGPT has {self.pokerGame.return_player_stack(1)} chips.")
+        logger.info(f"{self.ctx.author.name} - Starting a new round.")
+        logger.info(f"{self.ctx.author.name} - Player has {self.pokerGame.return_player_stack(0)} chips, PokerGPT has {self.pokerGame.return_player_stack(1)} chips.")
         await self.pre_flop()
 
     async def pre_flop(self):
-        logging.info(f"{self.ctx.author.name} - Pre-flop")
+        logger.info(f"{self.ctx.author.name} - Pre-flop")
         self.pokerGame.round = "pre-flop"
         self.pokerGame.reset_betting()
         await self.ctx.send("**Your Cards:**")
         await self.ctx.send(get_cards(self.pokerGame.return_player_hand(0), self.small_cards))
-        logging.info(f"{self.ctx.author.name} - Player has {self.pokerGame.return_player_hand_str(0)}, PokerGPT has {self.pokerGame.return_player_hand_str(1)}")
+        logger.info(f"{self.ctx.author.name} - Player has {self.pokerGame.return_player_hand_str(0)}, PokerGPT has {self.pokerGame.return_player_hand_str(1)}")
         if self.pokerGame.button == 0:
             # Player can't cover small blind
             if self.pokerGame.return_player_stack(0) < self.pokerGame.small_blind:
-                logging.info(f"{self.ctx.author.name} - Player can't cover small blind and is all-in for {self.pokerGame.return_player_stack(0)} chips.")
+                logger.info(f"{self.ctx.author.name} - Player can't cover small blind and is all-in for {self.pokerGame.return_player_stack(0)} chips.")
                 await self.ctx.send(f"{self.pokerGame.players[0].player_name} can not cover small blind and is __All-in for {self.pokerGame.return_player_stack(0)} chips.__")
                 self.pokerGame.player_raise(0, self.pokerGame.return_player_stack(0))
                 self.pokerGame.player_call(1)
@@ -109,7 +109,7 @@ class DiscordPokerManager:
 
             action, raise_amount = self.gpt_action.pre_flop_small_blind(self.pokerGame)
             if action == "Call":
-                logging.info(f"{self.ctx.author.name} - PokerGPT Calls.")
+                logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
                 await self.ctx.send("PokerGPT __Calls.__")
                 self.pokerGame.player_call(1)
                 await self.next_action()
@@ -120,7 +120,7 @@ class DiscordPokerManager:
             elif action == "Raise":
                 await self.pokerGPT_raise(raise_amount)
             else:
-                logging.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
+                logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
                 await self.pokerGPT_fold()
 
     async def deal_community_cards(self, round_name: str):
@@ -135,7 +135,7 @@ class DiscordPokerManager:
             self.pokerGame.deal_board(5)
 
         # Announce the community cards
-        logging.info(f"{self.ctx.author.name} - {round_name.capitalize()} {self.pokerGame.return_community_cards()}")
+        logger.info(f"{self.ctx.author.name} - {round_name.capitalize()} {self.pokerGame.return_community_cards()}")
         await self.ctx.send(f"**Community Cards ({round_name.capitalize()}):**")
         await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
 
@@ -158,7 +158,7 @@ class DiscordPokerManager:
         self.pokerGame.deal_board(5)
         await self.ctx.send("**Community Cards:**")
         await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
-        logging.info(f"{self.ctx.author.name} - Showdown {self.pokerGame.return_community_cards()}")
+        logger.info(f"{self.ctx.author.name} - Showdown {self.pokerGame.return_community_cards()}")
         
         # Evaluate each player's hand
         self.pokerGame.evaluate_hands()
@@ -170,13 +170,13 @@ class DiscordPokerManager:
 
             await self.ctx.send(f"**{player.hand_rank}**")
             await self.ctx.send(get_cards(player.hand_played, self.small_cards))
-            logging.info(f"{self.ctx.author.name} - {player.player_name} has {player.hand_rank}")
+            logger.info(f"{self.ctx.author.name} - {player.player_name} has {player.hand_rank}")
 
         # Determine the winner(s) and handle the pot
         winner = self.pokerGame.determine_winner()
         if isinstance(winner, list):
             # Split pot
-            logging.info(f"{self.ctx.author.name} - Split pot")
+            logger.info(f"{self.ctx.author.name} - Split pot")
             await self.ctx.send("**Split pot!!!**")
             split_pot = self.pokerGame.current_pot // 2
             self.pokerGame.player_win(winner)
@@ -187,7 +187,7 @@ class DiscordPokerManager:
             # Single winner
             pot = self.pokerGame.current_pot
             self.pokerGame.player_win(winner)
-            logging.info(f"{self.ctx.author.name} - {winner.player_name} wins {pot} chips")
+            logger.info(f"{self.ctx.author.name} - {winner.player_name} wins {pot} chips")
             await self.ctx.send(f"{winner.player_name} wins **{pot} chips** and has {winner.stack} chips.")
 
         # Check if either player is out of chips
@@ -213,7 +213,7 @@ class DiscordPokerManager:
         action, raise_amount = self.gpt_action.first_to_act(self.pokerGame)
 
         if action == "Check":
-            logging.info(f"{self.ctx.author.name} - PokerGPT Checks.")
+            logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
             await self.ctx.send("PokerGPT __Checks.__")
             await self.next_action()
         elif action == "All-in":
@@ -221,12 +221,12 @@ class DiscordPokerManager:
         elif action == "Raise":
             await self.pokerGPT_raise(raise_amount)
         else:
-            logging.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
+            logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
             await self.ctx.send("PokerGPT __Checks.__")
             await self.next_action()
 
     async def user_raise(self, amount: int):
-        logging.info(f"{self.ctx.author.name} - User raises to {amount} chips")
+        logger.info(f"{self.ctx.author.name} - User raises to {amount} chips")
         # Raise the player's bet
         self.pokerGame.player_raise(0, amount)
 
@@ -234,7 +234,7 @@ class DiscordPokerManager:
         action, raise_amount = self.gpt_action.player_raise(self.pokerGame)
 
         if action == "Call":
-            logging.info(f"{self.ctx.author.name} - PokerGPT Calls.")
+            logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
             await self.ctx.send("PokerGPT __Calls Raise.__")
             self.pokerGame.player_call(1)
             await self.next_action()
@@ -245,11 +245,11 @@ class DiscordPokerManager:
         elif action == "Raise":
             await self.pokerGPT_raise(raise_amount)
         else:
-            logging.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
+            logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
             await self.pokerGPT_fold()
 
     async def pokerGPT_raise(self, amount: int):
-        logging.info(f"{self.ctx.author.name} - PokerGPT raises to {amount} chips")
+        logger.info(f"{self.ctx.author.name} - PokerGPT raises to {amount} chips")
         # Raise the bet and announce it
         await self.ctx.send(f"PokerGPT __Raises to {amount} chips.__")
         self.pokerGame.player_raise(1, amount)
@@ -266,30 +266,30 @@ class DiscordPokerManager:
         await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it costs __{self.pokerGame.current_bet - self.pokerGame.players[0].round_pot_commitment} more to call.__", view=view)
 
     async def user_all_in(self):
-        logging.info(f"{self.ctx.author.name} - User goes All-in")
+        logger.info(f"{self.ctx.author.name} - User goes All-in")
         self.pokerGame.player_all_in_raise(0)
         action, raise_amount = self.gpt_action.player_all_in(self.pokerGame)
 
         if action == "Call":
-            logging.info(f"{self.ctx.author.name} - PokerGPT Calls All-in.")
+            logger.info(f"{self.ctx.author.name} - PokerGPT Calls All-in.")
             await self.ctx.send(f"PokerGPT __Calls All-in.__")
             self.pokerGame.player_call(1)
             await self.showdown()
         elif action == "Fold":
             await self.pokerGPT_fold()
         else:
-            logging.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
+            logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
             await self.pokerGPT_fold()
 
     async def pokerGPT_all_in(self):
-        logging.info(f"{self.ctx.author.name} - PokerGPT goes All-in")
+        logger.info(f"{self.ctx.author.name} - PokerGPT goes All-in")
         await self.ctx.send(f"PokerGPT is __All-in for {self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment} chips.__")
         self.pokerGame.player_all_in_raise(1)
         view = self.allInCallView(self)
         await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it is {self.pokerGame.current_bet - self.pokerGame.players[0].round_pot_commitment} more to call", view=view)
 
     async def user_fold(self):
-        logging.info(f"{self.ctx.author.name} - User Folds.")
+        logger.info(f"{self.ctx.author.name} - User Folds.")
         await self.ctx.send(f"PokerGPT wins __{self.pokerGame.current_pot} chips.__")
         self.pokerGame.player_win(1)
         await self.ctx.send(f"You have {self.pokerGame.return_player_stack(0)} chips.")
@@ -297,7 +297,7 @@ class DiscordPokerManager:
         await self.new_round_prompt()
 
     async def pokerGPT_fold(self):
-        logging.info(f"{self.ctx.author.name} - PokerGPT Folds.")
+        logger.info(f"{self.ctx.author.name} - PokerGPT Folds.")
         await self.ctx.send("PokerGPT Folds.")
         await self.ctx.send(f"You win __{self.pokerGame.current_pot} chips.__")
         self.pokerGame.player_win(0)
@@ -332,7 +332,7 @@ class DiscordPokerManager:
                 action, raise_amount = self.gpt_action.pre_flop_big_blind(self.pokerGame)
                 
                 if action == "Check":
-                    logging.info(f"{self.ctx.author.name} - PokerGPT Checks.")
+                    logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
                     await self.ctx.send("PokerGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
@@ -343,7 +343,7 @@ class DiscordPokerManager:
                     await self.pokerGPT_raise(raise_amount)
                     return
                 else:
-                    logging.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
+                    logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
                     await self.ctx.send("PokerGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
@@ -370,7 +370,7 @@ class DiscordPokerManager:
                 action, raise_amount = self.gpt_action.player_check(self.pokerGame)
 
                 if action == "Check":
-                    logging.info(f"{self.ctx.author.name} - PokerGPT Checks.")
+                    logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
                     await self.ctx.send("PokerGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
@@ -381,13 +381,13 @@ class DiscordPokerManager:
                     await self.pokerGPT_raise(raise_amount)
                     return
                 else:
-                    logging.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
+                    logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
                     await self.ctx.send("PokerGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
 
     def result_embed(self):
-        logging.info(f"{self.ctx.author.name} - Game Results Player Stack: {self.pokerGame.return_player_stack(0)} chips, PokerGPT Stack: {self.pokerGame.return_player_stack(1)} chips.")
+        logger.info(f"{self.ctx.author.name} - Game Results Player Stack: {self.pokerGame.return_player_stack(0)} chips, PokerGPT Stack: {self.pokerGame.return_player_stack(1)} chips.")
         embed = discord.Embed(title="Results")
         embed.add_field(name="PokerGPT", value=str(self.pokerGame.return_player_stack(1)))
         embed.add_field(name=self.ctx.author.name, value=str(self.pokerGame.return_player_stack(0)))
@@ -453,7 +453,7 @@ class DiscordPokerManager:
         @discord.ui.button(label="Call", style=ButtonStyle.blurple)
         async def call_button_callback(self, button, interaction):
             if await self.check(interaction):
-                logging.info(f"{self.ctx.author.name} - User Calls.")
+                logger.info(f"{self.ctx.author.name} - User Calls.")
                 self.responded = True
                 self.pokerGame.player_call(0)
                 if self.message:
@@ -494,7 +494,7 @@ class DiscordPokerManager:
 
         async def on_timeout(self):
             if not self.responded:
-                logging.info(f"{self.ctx.author.name} - User Checks.")
+                logger.info(f"{self.ctx.author.name} - User Checks.")
                 if self.message:
                     await self.message.edit(content="You took too long! You __Check.__", view=None)
                 await self.pokerManager.next_action()
@@ -506,7 +506,7 @@ class DiscordPokerManager:
         @discord.ui.button(label="Check", style=ButtonStyle.blurple)
         async def call_button_callback(self, button, interaction):
             if await self.check(interaction):
-                logging.info(f"{self.ctx.author.name} - User Checks.")
+                logger.info(f"{self.ctx.author.name} - User Checks.")
                 self.responded = True
                 if self.message:
                     await self.message.edit(content="You __Check.__", view=None)
@@ -548,7 +548,7 @@ class DiscordPokerManager:
         @discord.ui.button(label="Call All-in", style=ButtonStyle.blurple)
         async def call_button_callback(self, button, interaction):
             if await self.check(interaction):
-                logging.info(f"{self.ctx.author.name} - User Calls All-in.")
+                logger.info(f"{self.ctx.author.name} - User Calls All-in.")
                 self.responded = True
                 if self.message:
                     await self.message.edit(content="You __Call the All-in.__", view=None)
