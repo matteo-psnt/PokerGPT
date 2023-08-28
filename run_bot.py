@@ -202,7 +202,7 @@ async def server_stats(ctx, server_name: Option(str, name="server_name", descrip
             embed.add_field(name="Big Blind Losses", value=f"{server_stats[5]:.1f}")
             embed.add_field(name="Total Wins", value=server_stats[6])
             embed.add_field(name="Total Losses", value=server_stats[7])
-            embed.add_field(name="Total Dplit Pots", value=server_stats[8])
+            embed.add_field(name="Total Split Pots", value=server_stats[8])
         else:
             embed = discord.Embed(title="🚫 Error", description=f"No stats found for {server_name}", color=discord.Color.red())
         
