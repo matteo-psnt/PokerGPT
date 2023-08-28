@@ -195,11 +195,11 @@ class DiscordPokerManager:
         self.db_manager.end_hand(self.pokerGame.return_player_stack(0), "showdown")
         embed = self.result_embed()
         if self.pokerGame.return_player_stack(0) == 0:
-            self.db_manager.end_game(self.pokerGame.return_player_stack(0))
             await self.ctx.send(f"{self.pokerGame.players[1].player_name} wins the game! {self.pokerGame.players[0].player_name} is out of chips.", embeds=[embed])
-        elif self.pokerGame.return_player_stack(1) == 0:
             self.db_manager.end_game(self.pokerGame.return_player_stack(0))
+        elif self.pokerGame.return_player_stack(1) == 0:
             await self.ctx.send(f"{self.pokerGame.players[0].player_name} wins the game! {self.pokerGame.players[1].player_name} is out of chips.", embeds=[embed])
+            self.db_manager.end_game(self.pokerGame.return_player_stack(0))
         else:
             # Prompt to play another round
             await self.ctx.respond("Play another round?")
