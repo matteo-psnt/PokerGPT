@@ -188,16 +188,6 @@ class DatabaseManager:
             result = 'loss'
         elif net_bb == 0:
             result = 'draw'
-        
-        # Get the start timestamp of the game
-        get_game_start_time_stmt = (
-            "SELECT timestamp FROM games WHERE id = %s"
-        )
-        self.cursor.execute(get_game_start_time_stmt, (self.game_id,))
-        start_time = self.cursor.fetchone()[0]
-        
-        # Calculate the time difference in seconds between start and end of the game
-        time_diff = round((datetime.datetime.now() - start_time).total_seconds())
 
         update_game_stmt = (
             "UPDATE games SET end_timestamp = NOW(), ending_stack = %s, net_bb = %s, result = %s "
@@ -205,6 +195,15 @@ class DatabaseManager:
         )
         data = (ending_stack, net_bb, result, self.game_id)
         self.cursor.execute(update_game_stmt, data)
+        
+        # Get the start timestamp of the game
+        get_game_start_time_stmt = (
+            "SELECT timestamp, end_timestamp FROM games WHERE id = %s"
+        )
+        self.cursor.execute(get_game_start_time_stmt, (self.game_id,))
+        timestamps = self.cursor.fetchone()
+        
+        time_diff = round((timestamps[1] - timestamps[0]).total_seconds())
         
         # Update the user's total_time_played
         update_user_time_spent_stmt = (
