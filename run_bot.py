@@ -84,7 +84,7 @@ async def player_leaderboard(ctx):
         user_place = db_manager.get_user_place()
         user_stats = db_manager.get_user_stats_of_player()
         
-        embed = discord.Embed(title="🏆 PokerGPT Leaderboard", color=discord.Color.blurple())
+        embed = discord.Embed(title="🏆 PokerGPT Leaderboard", color=discord.Color.blue())
         
         # Add top players to the embed
         rank_text = ""
@@ -119,7 +119,7 @@ async def player_stats(ctx, username: Option(str, name="username", description="
             user_stats = db_manager.get_user_stats_by_username(username)
         
         if user_stats:
-            embed = discord.Embed(title=f"📊 Stats for {username}", color=discord.Color.blue())
+            embed = discord.Embed(title=f"📊 Stats for {username}", color=discord.Color.green())
             
             hands = user_stats[0]
             if hands == 0:
