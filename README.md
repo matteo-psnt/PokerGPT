@@ -16,7 +16,7 @@ To get information about the bot, use the following command:
 
 `/info`
 
-![Info Command](docs/images/info.png)
+![Info Command](docs/command_images/info.png)
 
 ---
 
@@ -34,7 +34,7 @@ To view the leaderboard for all players, use the following command:
 
 `/player_leaderboard`
 
-![Player Leaderboard Command](docs/images/player_leaderboard.png)
+![Player Leaderboard Command](docs/command_images/player_leaderboard.png)
 
 ---
 
@@ -44,7 +44,7 @@ To view player statistics, use the following command:
 
 - `username` (optional): Chose user to view statistics for (default: yourself).
 
-![Player Stats Command](docs/images/player_stats.png)
+![Player Stats Command](docs/command_images/player_stats.png)
 
 
 ---
@@ -53,7 +53,7 @@ To view the leaderboard for all servers, use the following command:
 
 `/server_leaderboard`
 
-![Server Leaderboard Command](docs/images/server_leaderboard.png)
+![Server Leaderboard Command](docs/command_images/server_leaderboard.png)
 
 
 ---
@@ -64,7 +64,7 @@ To view server statistics, use the following command:
 
 - `server` (optional): Chose server to view statistics for (default: current server).
 
-![Server Stats Command](docs/images/server_stats.png)
+![Server Stats Command](docs/command_images/server_stats.png)
 
 ## Setup
 
