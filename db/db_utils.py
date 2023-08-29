@@ -121,10 +121,10 @@ class DatabaseManager:
         self.big_blind = big_blind
         self.game_starting_stack = starting_stack
         add_game_stmt = (
-            "INSERT INTO games (server_id, user_id, small_blind, big_blind, starting_stack) "
-            "VALUES (%s, %s, %s, %s, %s)"
+            "INSERT INTO games (server_id, user_id, small_blind, big_blind, starting_stack, bot_version) "
+            "VALUES (%s, %s, %s, %s, %s, %s)"
         )
-        data = (self.server_id, self.user_id, small_blind, big_blind, starting_stack)
+        data = (self.server_id, self.user_id, small_blind, big_blind, starting_stack, 'v1.0.0')
         self.cursor.execute(add_game_stmt, data)
         self.game_id = self.cursor.lastrowid
         self.cnx.commit()

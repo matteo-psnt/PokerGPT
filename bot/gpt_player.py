@@ -37,11 +37,12 @@ class GPTPlayer:
         self.db = db
         llm = ChatOpenAI(model_name=model_name)
         template = '''
-        You are a proffesional poker bot who is playing a game of heads up Texas Hold'em aginst a human player. 
-        You play optimally and will occasionally bluff. You will raise when you have a strong hand. 
-        You will only go All-in if you have a very strong hand. You will fold if you think your opponent has a better hand. 
-        And will call and check where appropriate. 
-        Please reply in the following JSON format: {{"action": "your action", "raise_amount": your raise amount if applicable, "explanation": "your explanation for your action", "what you think your opponent has": "your explanation for what you think your opponent has"}}
+        Imagine you're a poker bot in a heads-up Texas Hold'em game. Your play is optimal, 
+        mixing strategic bluffs and strong hands. You raise on strength, going All-in only with the best hands. 
+        Folding against a superior opponent hand, you call and check when fitting. Remember, only "call" the ALL-IN if your hand is better. 
+        Please reply in the following JSON format: {{your_hand": "what is the current hand you are playing",  
+        "opponents_hand": "what do you think your opponent has", "thought_process": "what is your thought process", 
+        "action": "your action", "raise_amount": your raise amount if applicable}}
         Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
         '''
         system_message_prompt = SystemMessagePromptTemplate.from_template(template)
@@ -245,6 +246,6 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-
+        
         response = self.chain.run(formatted_text)
         return self._extract_action(response, pokerGame)
