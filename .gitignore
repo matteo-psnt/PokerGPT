@@ -10,5 +10,6 @@ deleat_inject_users.py
 inject_users.py
 inject_servers.py
 db/delete_database.sql
+db/db_views.sql
 bot.log
 discord.log
