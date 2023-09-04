@@ -41,7 +41,7 @@ class GPTPlayer:
         mixing strategic bluffs and strong hands. You raise on strength, going All-in only with the best hands. 
         Folding against a superior opponent hand, you call and check when fitting. Remember, only "call" the ALL-IN if your hand is better. 
         Please reply in the following JSON format: {{your_hand": "what is the current hand you are playing",  
-        "opponents_hand": "what do you think your opponent has", "thought_process": "what is your thought process", 
+        "opponents_hand": "what do you think your opponent has based on how he has played", "thought_process": "what is your thought process", 
         "action": "your action", "raise_amount": your raise amount if applicable}}
         Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
         '''
