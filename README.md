@@ -28,7 +28,7 @@ To start a game of Texas Hold'em poker, use the following command:
 - `big-blind` (optional): Set the big blind amount (default: 10, minimum: 2).
 - `small-cards` (optional): Use small cards (default: False).
 
-![Info Command](docs/command_images/KA_play.png)
+![Play Poker Command Preview](docs/command_images/play_poker_preview.gif)
 
 ---
 
