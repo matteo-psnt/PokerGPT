@@ -10,20 +10,19 @@ from game.poker import PokerGameManager
 
 class DiscordPokerManager:
     def __init__(self, ctx, pokerGame: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float,
-                 model_name: str = "gpt-3.5-turbo", memory: bool = False):
+                 model_name: str = "gpt-3.5-turbo"):
         self.ctx = ctx
         self.pokerGame = pokerGame
         self.db_manager = db_manager
         self.small_cards = small_cards
         self.timeout = timeout
         self.model_name = model_name
-        self.memory = memory
 
         db_manager.initialize_game(pokerGame.small_blind, pokerGame.big_blind, pokerGame.starting_stack)
 
     async def play_round(self):
         self.pokerGame.new_round()
-        self.gpt_action = GPTPlayer(self.db_manager, model_name=self.model_name, memory=self.memory)
+        self.gpt_action = GPTPlayer(self.db_manager, model_name=self.model_name)
         self.db_manager.initialize_hand(self.pokerGame.return_player_hand_str(0), self.pokerGame.return_player_hand_str(1), self.pokerGame.return_player_stack(0))
         logger.info(f"{self.ctx.author.name} - Starting a new round.")
         logger.info(f"{self.ctx.author.name} - Player has {self.pokerGame.return_player_stack(0)} chips, PokerGPT has {self.pokerGame.return_player_stack(1)} chips.")

@@ -1,41 +1,17 @@
-from langchain import PromptTemplate
-from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
-from langchain.llms import OpenAI
-from langchain.prompts.chat import (
-    ChatPromptTemplate,
-    SystemMessagePromptTemplate,
-    HumanMessagePromptTemplate,
-    MessagesPlaceholder
-)
-from langchain.memory import ConversationSummaryMemory
-from config.config import API_KEY
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain.prompts import PromptTemplate
+from langchain.prompts.chat import ChatPromptTemplate
+from config.config import OPENAI_API_KEY
 from game.poker import PokerGameManager
 from db.db_utils import DatabaseManager
 import json
 
-
-# Define the SUMMARY_PROMPT template
-SUMMARY_PROMPT_TEMPLATE = """
-Current summary of the oppenent's play and thought process of the AI:
-{summary}
-
-New lines of conversation:
-{new_lines}
-
-What is the curent thought process of the AI? And what has been the play from the Opponent?:
-"""
-
-# Create the SUMMARY_PROMPT using PromptTemplate
-SUMMARY_PROMPT = PromptTemplate(
-    input_variables=["summary", "new_lines"],
-    template=SUMMARY_PROMPT_TEMPLATE
-)
-
 class GPTPlayer:
-    def __init__(self, db: DatabaseManager, model_name="gpt-3.5-turbo", memory=False, verbose=False):
+    def __init__(self, db: DatabaseManager, model_name="gpt-3.5-turbo"):
         self.db = db
         llm = ChatOpenAI(model_name=model_name)
+        output_parser = StrOutputParser()
         template = '''
         Imagine you're a poker bot in a heads-up Texas Hold'em game. Your play is optimal, 
         mixing strategic bluffs and strong hands. You raise on strength, going All-in only with the best hands. 
@@ -45,25 +21,13 @@ class GPTPlayer:
         "action": "your action", "raise_amount": your raise amount if applicable}}
         Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
         '''
-        system_message_prompt = SystemMessagePromptTemplate.from_template(template)
-        human_message_prompt = HumanMessagePromptTemplate.from_template("{input}")
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", template),
+            ("user", "{input}")
+        ])
 
-        if memory:
-            mesage_placeholder = MessagesPlaceholder(variable_name="chat_history")
-            chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, mesage_placeholder, human_message_prompt])
-            
-            chat_memory = ConversationSummaryMemory(
-                ai_prefix="PokerGPT", 
-                llm=OpenAI(temperature=0), 
-                prompt=SUMMARY_PROMPT,
-                return_messages=True,
-                memory_key="chat_history")
-
-            self.chain = LLMChain(llm=llm, prompt=chat_prompt, memory=chat_memory, verbose=verbose)
-        else:
-            chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
-
-            self.chain = LLMChain(llm=llm, prompt=chat_prompt, verbose=verbose)
+        self.chain = prompt | llm | output_parser
         
     def _extract_action(self, json_string, pokerGame: PokerGameManager):
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
@@ -109,7 +73,7 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = self.chain.run(formatted_text)
+        response = self.chain.invoke({'input': formatted_text})
         return self._extract_action(response, pokerGame)
 
     def pre_flop_big_blind(self, pokerGame: PokerGameManager):
@@ -134,7 +98,7 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = self.chain.run(formatted_text)
+        response = self.chain.invoke({'input': formatted_text})
         return self._extract_action(response, pokerGame)
     
     def first_to_act(self, pokerGame: PokerGameManager):
@@ -159,7 +123,7 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = self.chain.run(formatted_text)
+        response = self.chain.invoke({'input': formatted_text})
         return self._extract_action(response, pokerGame)
     
     def player_check(self, pokerGame: PokerGameManager):
@@ -185,7 +149,7 @@ class GPTPlayer:
         
         formatted_text = human_template.format(**inputs)
 
-        response = self.chain.run(formatted_text)
+        response = self.chain.invoke({'input': formatted_text})
         return self._extract_action(response, pokerGame)
     
     def player_raise(self, pokerGame: PokerGameManager):
@@ -215,7 +179,7 @@ class GPTPlayer:
 
         formatted_text = human_template.format(**inputs)
 
-        response = self.chain.run(formatted_text)
+        response = self.chain.invoke({'input': formatted_text})
         return self._extract_action(response, pokerGame)  
 
     def player_all_in(self, pokerGame: PokerGameManager):
@@ -247,5 +211,5 @@ class GPTPlayer:
 
         formatted_text = human_template.format(**inputs)
         
-        response = self.chain.run(formatted_text)
+        response = self.chain.invoke({'input': formatted_text})
         return self._extract_action(response, pokerGame)

@@ -1,8 +1,8 @@
 import os
-import dotenv
-dotenv.load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
-API_KEY = str(os.getenv("OPENAI_API_KEY"))
+OPENAI_API_KEY = str(os.getenv("OPENAI_API_KEY"))
 
 TOKEN = str(os.getenv("DISCORD_TOKEN"))
 
