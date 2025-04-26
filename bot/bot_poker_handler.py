@@ -5,7 +5,7 @@ from bot.card_display import get_cards
 from bot.gpt_player import GPTPlayer
 from config.log_config import logger
 from db.db_utils import DatabaseManager
-from db.enums import Round
+from db.enums import ActionType, Round
 from game.poker import PokerGameManager
 
 
@@ -108,16 +108,16 @@ class DiscordPokerManager:
             self.pokerGame.player_raise(0, self.pokerGame.big_blind)
 
             action, raise_amount = self.gpt_action.pre_flop_small_blind(self.pokerGame)
-            if action == "Call":
+            if action == ActionType.CALL:
                 logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
                 await self.ctx.send("PokerGPT __Calls.__")
                 self.pokerGame.player_call(1)
                 await self.next_action()
-            elif action == "All-in":
+            elif action == ActionType.ALL_IN:
                 await self.pokerGPT_all_in()
-            elif action == "Fold":
+            elif action == ActionType.FOLD:
                 await self.pokerGPT_fold()
-            elif action == "Raise":
+            elif action == ActionType.RAISE:
                 await self.pokerGPT_raise(raise_amount)
             else:
                 logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
@@ -212,13 +212,13 @@ class DiscordPokerManager:
     async def pokerGPT_acts_first(self):
         action, raise_amount = self.gpt_action.first_to_act(self.pokerGame)
 
-        if action == "Check":
+        if action == ActionType.CHECK:
             logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
             await self.ctx.send("PokerGPT __Checks.__")
             await self.next_action()
-        elif action == "All-in":
+        elif action == ActionType.ALL_IN:
             await self.pokerGPT_all_in()
-        elif action == "Raise":
+        elif action == ActionType.RAISE:
             await self.pokerGPT_raise(raise_amount)
         else:
             logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
@@ -233,16 +233,16 @@ class DiscordPokerManager:
         # Get GPT's move and handle it
         action, raise_amount = self.gpt_action.player_raise(self.pokerGame)
 
-        if action == "Call":
+        if action == ActionType.CALL:
             logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
             await self.ctx.send("PokerGPT __Calls Raise.__")
             self.pokerGame.player_call(1)
             await self.next_action()
-        elif action == "Fold":
+        elif action == ActionType.FOLD:
             await self.pokerGPT_fold()
-        elif action == "All-in":
+        elif action == ActionType.ALL_IN:
             await self.pokerGPT_all_in()
-        elif action == "Raise":
+        elif action == ActionType.RAISE:
             await self.pokerGPT_raise(raise_amount)
         else:
             logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
@@ -270,12 +270,12 @@ class DiscordPokerManager:
         self.pokerGame.player_all_in_raise(0)
         action, raise_amount = self.gpt_action.player_all_in(self.pokerGame)
 
-        if action == "Call":
+        if action == ActionType.CALL:
             logger.info(f"{self.ctx.author.name} - PokerGPT Calls All-in.")
             await self.ctx.send(f"PokerGPT __Calls All-in.__")
             self.pokerGame.player_call(1)
             await self.showdown()
-        elif action == "Fold":
+        elif action == ActionType.FOLD:
             await self.pokerGPT_fold()
         else:
             logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
@@ -331,15 +331,15 @@ class DiscordPokerManager:
             if self.pokerGame.button == 0:
                 action, raise_amount = self.gpt_action.pre_flop_big_blind(self.pokerGame)
                 
-                if action == "Check":
+                if action == ActionType.CHECK:
                     logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
                     await self.ctx.send("PokerGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
-                elif action == "All-in":
+                elif action == ActionType.ALL_IN:
                     await self.pokerGPT_all_in()
                     return
-                elif action == "Raise":
+                elif action == ActionType.RAISE:
                     await self.pokerGPT_raise(raise_amount)
                     return
                 else:
@@ -369,15 +369,15 @@ class DiscordPokerManager:
             elif self.pokerGame.button == 1:
                 action, raise_amount = self.gpt_action.player_check(self.pokerGame)
 
-                if action == "Check":
+                if action == ActionType.CHECK:
                     logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
                     await self.ctx.send("PokerGPT __Checks.__")
                     await self.move_to_next_betting_round()
                     return
-                elif action == "All-in":
+                elif action == ActionType.ALL_IN:
                     await self.pokerGPT_all_in()
                     return
-                elif action == "Raise":
+                elif action == ActionType.RAISE:
                     await self.pokerGPT_raise(raise_amount)
                     return
                 else:

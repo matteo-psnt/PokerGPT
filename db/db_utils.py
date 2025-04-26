@@ -231,14 +231,9 @@ class DatabaseManager:
         self.hand.community_cards = community_cards
         self._safe_commit()
 
-    def record_gpt_action(self, action_type: str, raise_amount: int | None, json_data: str):
-        # TODO: Use Enum for action_type
+    def record_gpt_action(self, action_type: ActionType, raise_amount: int | None, json_data: str):
         if not DATABASE_EXISTS:
             return
-            
-        action_type = action_type.lower()
-        if action_type not in ActionType._value2member_map_:
-            raise ValueError(f"Invalid action type: {action_type}")
         
         action = GPTAction(
             user_id=self.user.id,

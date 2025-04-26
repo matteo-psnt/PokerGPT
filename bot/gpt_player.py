@@ -1,11 +1,10 @@
+import json
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
-from langchain.prompts import PromptTemplate
 from langchain.prompts.chat import ChatPromptTemplate
-from config.config import OPENAI_API_KEY
 from game.poker import PokerGameManager
 from db.db_utils import DatabaseManager
-import json
+from db.enums import ActionType
 
 class GPTPlayer:
     def __init__(self, db: DatabaseManager, model_name="gpt-4.1-nano"):
@@ -33,18 +32,20 @@ class GPTPlayer:
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
         try:
             json_data = json.loads(json_string)
-            action = json_data['action'].lower()
+            action_str = json_data['action'].lower()
+            action = ActionType(action_str)
+                        
             raise_amount = None
-            if action == "raise":
-                raise_amount = json_data['raise_amount']
-                raise_amount = int(raise_amount)
+            if action == ActionType.RAISE:
+                raise_amount = int(json_data['raise_amount'])
                 
                 if raise_amount < min_raise:
                     raise_amount = min_raise
 
-                elif raise_amount > max_raise:
-                    action = "all-in"
+                elif raise_amount >= max_raise:
+                    action = ActionType.ALL_IN
                     raise_amount = pokerGame.return_player_stack(1)
+            
             self.db.record_gpt_action(action, raise_amount, json_string)
             return (action, raise_amount)
         except Exception as erro:
