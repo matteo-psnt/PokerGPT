@@ -6,174 +6,173 @@ from game.poker import PokerGameManager
 from game.card import Card, Rank, Suit
 from db.enums import Round
 
-class TestDiscordPokerManager:
-    @pytest.fixture
-    def mock_ctx(self):
-        ctx = MagicMock()
-        ctx.send = AsyncMock()
-        ctx.respond = AsyncMock()
-        ctx.author = MagicMock()
-        ctx.author.name = "TestUser"
-        return ctx
-    
-    @pytest.fixture
-    def mock_db_manager(self):
-        db = MagicMock()
-        db.initialize_game = MagicMock()
-        db.initialize_hand = MagicMock()
-        db.record_gpt_action = MagicMock()
-        db.update_community_cards = MagicMock()
-        db.end_hand = MagicMock()
-        db.end_game = MagicMock()
-        return db
-    
-    @pytest.fixture
-    def poker_game(self):
-        game = PokerGameManager(buy_in=1000, small_blind=5, big_blind=10)
-        return game
-    
-    @pytest.fixture
-    def discord_poker_manager(self, mock_ctx, poker_game, mock_db_manager):
-        with patch('bot.bot_poker_handler.GPTPlayer'):
-            manager = DiscordPokerManager(
-                ctx=mock_ctx,
-                pokerGame=poker_game,
-                db_manager=mock_db_manager,
-                small_cards=False,
-                timeout=60.0,
-                model_name="test-model"
-            )
-            # Mock the card display
-            with patch('bot.bot_poker_handler.get_cards', return_value="[Card Display]"):
-                return manager
-    
-    @pytest.mark.asyncio
-    async def test_initialization(self, discord_poker_manager, mock_db_manager, poker_game, mock_ctx):
-        # Check that database was initialized properly
-        mock_db_manager.initialize_game.assert_called_once_with(
-            poker_game.small_blind, 
-            poker_game.big_blind, 
-            poker_game.starting_stack
+@pytest.fixture
+def mock_ctx():
+    ctx = MagicMock()
+    ctx.send = AsyncMock()
+    ctx.respond = AsyncMock()
+    ctx.author = MagicMock()
+    ctx.author.name = "TestUser"
+    return ctx
+
+@pytest.fixture
+def mock_db_manager():
+    db = MagicMock()
+    db.initialize_game = MagicMock()
+    db.initialize_hand = MagicMock()
+    db.record_gpt_action = MagicMock()
+    db.update_community_cards = MagicMock()
+    db.end_hand = MagicMock()
+    db.end_game = MagicMock()
+    return db
+
+@pytest.fixture
+def poker_game():
+    game = PokerGameManager(buy_in=1000, small_blind=5, big_blind=10)
+    return game
+
+@pytest.fixture
+def discord_poker_manager(mock_ctx, poker_game, mock_db_manager):
+    with patch('bot.bot_poker_handler.GPTPlayer'):
+        manager = DiscordPokerManager(
+            ctx=mock_ctx,
+            pokerGame=poker_game,
+            db_manager=mock_db_manager,
+            small_cards=False,
+            timeout=60.0,
+            model_name="test-model"
         )
-        
-        # Check that manager holds the correct references
-        assert discord_poker_manager.ctx == mock_ctx
-        assert discord_poker_manager.pokerGame == poker_game
-        assert discord_poker_manager.db_manager == mock_db_manager
-        assert discord_poker_manager.small_cards is False
-        assert discord_poker_manager.timeout == 60.0
-        assert discord_poker_manager.model_name == "test-model"
+        # Mock the card display
+        with patch('bot.bot_poker_handler.get_cards', return_value="[Card Display]"):
+            return manager
+
+@pytest.mark.asyncio
+async def test_initialization(discord_poker_manager, mock_db_manager, poker_game, mock_ctx):
+    # Check that database was initialized properly
+    mock_db_manager.initialize_game.assert_called_once_with(
+        poker_game.small_blind, 
+        poker_game.big_blind, 
+        poker_game.starting_stack
+    )
     
-    @pytest.mark.asyncio
-    async def test_play_round(self, discord_poker_manager, mock_ctx, poker_game, mock_db_manager):
-        # Mock GPT player
-        with patch.object(discord_poker_manager, 'pre_flop', AsyncMock()) as mock_pre_flop, \
-             patch('bot.bot_poker_handler.GPTPlayer') as MockGPTPlayer:
-            
-            # Set up GPT player mock
-            mock_gpt_player = MockGPTPlayer.return_value
-            
-            # Call play_round
-            await discord_poker_manager.play_round()
-            
-            # Check that new round is initialized
-            assert discord_poker_manager.gpt_action == mock_gpt_player
-            mock_db_manager.initialize_hand.assert_called_once()
-            mock_pre_flop.assert_called_once()
-    
-    @pytest.mark.asyncio
-    async def test_deal_community_cards_flop(self, discord_poker_manager, mock_ctx, poker_game):
-        # Set up player hands for testing
-        poker_game.players[0].card1 = Card(Rank.ACE, Suit.SPADES)
-        poker_game.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
-        poker_game.players[1].card1 = Card(Rank.QUEEN, Suit.DIAMONDS)
-        poker_game.players[1].card2 = Card(Rank.JACK, Suit.CLUBS)
+    # Check that manager holds the correct references
+    assert discord_poker_manager.ctx == mock_ctx
+    assert discord_poker_manager.pokerGame == poker_game
+    assert discord_poker_manager.db_manager == mock_db_manager
+    assert discord_poker_manager.small_cards is False
+    assert discord_poker_manager.timeout == 60.0
+    assert discord_poker_manager.model_name == "test-model"
+
+@pytest.mark.asyncio
+async def test_play_round(discord_poker_manager, mock_ctx, poker_game, mock_db_manager):
+    # Mock GPT player
+    with patch.object(discord_poker_manager, 'pre_flop', AsyncMock()) as mock_pre_flop, \
+         patch('bot.bot_poker_handler.GPTPlayer') as MockGPTPlayer:
         
-        # Mock the actions
-        with patch.object(discord_poker_manager, 'pokerGPT_acts_first', AsyncMock()) as mock_gpt_acts, \
-             patch.object(discord_poker_manager, 'user_acts_first', AsyncMock()) as mock_user_acts:
-            
-            # Test flop
-            poker_game.button = 0  # GPT acts first
-            await discord_poker_manager.deal_community_cards(Round.FLOP)
-            
-            # Check that community cards were dealt
-            assert len(poker_game.board) == 3
-            assert mock_ctx.send.call_count >= 3  # Multiple calls to send messages
-            mock_gpt_acts.assert_called_once()
-            mock_user_acts.assert_not_called()
-            
-            # Test with player acting first
-            mock_gpt_acts.reset_mock()
-            mock_user_acts.reset_mock()
-            poker_game.board = []  # Reset board
-            poker_game.button = 1  # Player acts first
-            
-            await discord_poker_manager.deal_community_cards(Round.FLOP)
-            assert len(poker_game.board) == 3
-            mock_gpt_acts.assert_not_called()
-            mock_user_acts.assert_called_once()
-    
-    @pytest.mark.asyncio
-    async def test_showdown(self, discord_poker_manager, mock_ctx, poker_game, mock_db_manager):
-        # Set up player hands and board for testing
-        poker_game.players[0].card1 = Card(Rank.ACE, Suit.SPADES)
-        poker_game.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
-        poker_game.players[1].card1 = Card(Rank.QUEEN, Suit.DIAMONDS)
-        poker_game.players[1].card2 = Card(Rank.JACK, Suit.CLUBS)
-        poker_game.board = [
-            Card(Rank.TEN, Suit.SPADES),
-            Card(Rank.NINE, Suit.HEARTS),
-            Card(Rank.EIGHT, Suit.DIAMONDS)
-        ]
-        poker_game.current_pot = 100
+        # Set up GPT player mock
+        mock_gpt_player = MockGPTPlayer.return_value
         
-        # Mock the result_embed method
-        with patch.object(discord_poker_manager, 'result_embed', return_value=discord.Embed(title="Results")):
-            # Call showdown
-            await discord_poker_manager.showdown()
-            
-            # Check that community cards were dealt to 5
-            assert len(poker_game.board) == 5
-            
-            # Verify database was updated
-            mock_db_manager.update_community_cards.assert_called_once()
-            mock_db_manager.end_hand.assert_called_once()
-            
-            # Check that context methods were called
-            assert mock_ctx.send.call_count >= 5  # Multiple messages sent
-            mock_ctx.respond.assert_called_once_with("Play another round?")
-    
-    @pytest.mark.asyncio
-    async def test_player_wins_game(self, discord_poker_manager, mock_ctx, poker_game, mock_db_manager):
-        # Set up scenario where player wins the game
-        poker_game.players[0].card1 = Card(Rank.ACE, Suit.SPADES)
-        poker_game.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
-        poker_game.players[1].card1 = Card(Rank.QUEEN, Suit.DIAMONDS)
-        poker_game.players[1].card2 = Card(Rank.JACK, Suit.CLUBS)
-        poker_game.board = [
-            Card(Rank.ACE, Suit.HEARTS),
-            Card(Rank.ACE, Suit.DIAMONDS),
-            Card(Rank.KING, Suit.SPADES),
-            Card(Rank.QUEEN, Suit.HEARTS),
-            Card(Rank.TWO, Suit.CLUBS)
-        ]
-        poker_game.current_pot = 1000
-        poker_game.players[1].stack = 0  # Bot has no chips left
+        # Call play_round
+        await discord_poker_manager.play_round()
         
-        # Mock the result_embed method
-        with patch.object(discord_poker_manager, 'result_embed', return_value=discord.Embed(title="Results")):
-            # Call showdown
-            await discord_poker_manager.showdown()
-            
-            # Verify game was ended
-            mock_db_manager.end_game.assert_called_once_with(poker_game.return_player_stack(0))
-            
-            # Check that victory message was sent
-            victory_message_sent = False
-            for call in mock_ctx.send.call_args_list:
-                args, kwargs = call
-                if args and "wins the game" in args[0]:
-                    victory_message_sent = True
-                    break
-            assert victory_message_sent
+        # Check that new round is initialized
+        assert discord_poker_manager.gpt_action == mock_gpt_player
+        mock_db_manager.initialize_hand.assert_called_once()
+        mock_pre_flop.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_deal_community_cards_flop(discord_poker_manager, mock_ctx, poker_game):
+    # Set up player hands for testing
+    poker_game.players[0].card1 = Card(Rank.ACE, Suit.SPADES)
+    poker_game.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
+    poker_game.players[1].card1 = Card(Rank.QUEEN, Suit.DIAMONDS)
+    poker_game.players[1].card2 = Card(Rank.JACK, Suit.CLUBS)
+    
+    # Mock the actions
+    with patch.object(discord_poker_manager, 'pokerGPT_acts_first', AsyncMock()) as mock_gpt_acts, \
+         patch.object(discord_poker_manager, 'user_acts_first', AsyncMock()) as mock_user_acts:
+        
+        # Test flop
+        poker_game.button = 0  # GPT acts first
+        await discord_poker_manager.deal_community_cards(Round.FLOP)
+        
+        # Check that community cards were dealt
+        assert len(poker_game.board) == 3
+        assert mock_ctx.send.call_count >= 3  # Multiple calls to send messages
+        mock_gpt_acts.assert_called_once()
+        mock_user_acts.assert_not_called()
+        
+        # Test with player acting first
+        mock_gpt_acts.reset_mock()
+        mock_user_acts.reset_mock()
+        poker_game.board = []  # Reset board
+        poker_game.button = 1  # Player acts first
+        
+        await discord_poker_manager.deal_community_cards(Round.FLOP)
+        assert len(poker_game.board) == 3
+        mock_gpt_acts.assert_not_called()
+        mock_user_acts.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_showdown(discord_poker_manager, mock_ctx, poker_game, mock_db_manager):
+    # Set up player hands and board for testing
+    poker_game.players[0].card1 = Card(Rank.ACE, Suit.SPADES)
+    poker_game.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
+    poker_game.players[1].card1 = Card(Rank.QUEEN, Suit.DIAMONDS)
+    poker_game.players[1].card2 = Card(Rank.JACK, Suit.CLUBS)
+    poker_game.board = [
+        Card(Rank.TEN, Suit.SPADES),
+        Card(Rank.NINE, Suit.HEARTS),
+        Card(Rank.EIGHT, Suit.DIAMONDS)
+    ]
+    poker_game.current_pot = 100
+    
+    # Mock the result_embed method
+    with patch.object(discord_poker_manager, 'result_embed', return_value=discord.Embed(title="Results")):
+        # Call showdown
+        await discord_poker_manager.showdown()
+        
+        # Check that community cards were dealt to 5
+        assert len(poker_game.board) == 5
+        
+        # Verify database was updated
+        mock_db_manager.update_community_cards.assert_called_once()
+        mock_db_manager.end_hand.assert_called_once()
+        
+        # Check that context methods were called
+        assert mock_ctx.send.call_count >= 5  # Multiple messages sent
+        mock_ctx.respond.assert_called_once_with("Play another round?")
+
+@pytest.mark.asyncio
+async def test_player_wins_game(discord_poker_manager, mock_ctx, poker_game, mock_db_manager):
+    # Set up scenario where player wins the game
+    poker_game.players[0].card1 = Card(Rank.ACE, Suit.SPADES)
+    poker_game.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
+    poker_game.players[1].card1 = Card(Rank.QUEEN, Suit.DIAMONDS)
+    poker_game.players[1].card2 = Card(Rank.JACK, Suit.CLUBS)
+    poker_game.board = [
+        Card(Rank.ACE, Suit.HEARTS),
+        Card(Rank.ACE, Suit.DIAMONDS),
+        Card(Rank.KING, Suit.SPADES),
+        Card(Rank.QUEEN, Suit.HEARTS),
+        Card(Rank.TWO, Suit.CLUBS)
+    ]
+    poker_game.current_pot = 1000
+    poker_game.players[1].stack = 0  # Bot has no chips left
+    
+    # Mock the result_embed method
+    with patch.object(discord_poker_manager, 'result_embed', return_value=discord.Embed(title="Results")):
+        # Call showdown
+        await discord_poker_manager.showdown()
+        
+        # Verify game was ended
+        mock_db_manager.end_game.assert_called_once_with(poker_game.return_player_stack(0))
+        
+        # Check that victory message was sent
+        victory_message_sent = False
+        for call in mock_ctx.send.call_args_list:
+            args, kwargs = call
+            if args and "wins the game" in args[0]:
+                victory_message_sent = True
+                break
+        assert victory_message_sent

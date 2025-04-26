@@ -1,5 +1,4 @@
 from datetime import datetime
-from math import log
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
