@@ -1,422 +1,300 @@
-import datetime
-import mysql.connector
-from config.config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE, DATABASE_EXISTS
+from datetime import datetime
+from math import log
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
+from decimal import Decimal, ROUND_HALF_UP
+from db.models import ActionType, User, Server, Game, Hand, GPTAction, ServerUser
+from db.enums import GameResult, HandResult, Round
+from config.config import DATABASE_EXISTS
+
 
 class DatabaseManager:
-    def __init__(self, discord_id, username, host_id, server_name):
+    def __init__(
+        self,
+        session: Session,
+        discord_id: str,
+        username: str,
+        host_id: str,
+        server_name: str,
+    ):
+        self.session = session
         self.discord_id = discord_id
         self.username = username
         self.host_id = host_id
         self.server_name = server_name
+
         if DATABASE_EXISTS:
-            self.cnx = mysql.connector.connect(
-                host=DB_HOST,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                database=DB_DATABASE
-            )
-            self.cursor = self.cnx.cursor()
-            self._check_for_user()
-            self._check_for_server()
-            self._check_for_server_user()
-    
-    def _check_for_user(self):
-        check_user_stmt = (
-            "SELECT discord_id, username FROM users "
-            "WHERE discord_id = %s"
-        )
-        self.cursor.execute(check_user_stmt, (self.discord_id,))
-        result = self.cursor.fetchone()
-        if result is None:
-            add_user_stmt = (
-                "INSERT INTO users (discord_id, username) "
-                "VALUES (%s, %s)"
-            )
-            data = (self.discord_id, self.username)
-            self.cursor.execute(add_user_stmt, data)
-            self.cnx.commit()
-        else:
-            if self.username != result[1]:
-                self._update_nickname()
+            self._check_or_create_user()
+            self._check_or_create_server()
+            self._check_or_create_server_user()
 
-    def _check_for_server(self):
-        check_server_stmt = (
-            "SELECT host_id, server_name FROM servers "
-            "WHERE host_id = %s"
-        )
-        self.cursor.execute(check_server_stmt, (self.host_id,))
-        result = self.cursor.fetchone()
-        if result is None:
-            add_server_stmt = (
-                "INSERT INTO servers (host_id, server_name) "
-                "VALUES (%s, %s)"
-            )
-            data = (self.host_id, self.server_name)
-            self.cursor.execute(add_server_stmt, data)
-            self.cnx.commit()
-        else:
-            if self.server_name != result[1]:
-                self._update_server_name()
-    
-    def _check_for_server_user(self):
-        get_server_id_stmt = (
-            "SELECT id FROM servers "
-            "WHERE host_id = %s"
-        )
-        self.cursor.execute(get_server_id_stmt, (self.host_id,))
-        self.server_id = self.cursor.fetchone()[0]
+    def _safe_commit(self):
+        try:
+            self.session.commit()
+        except SQLAlchemyError:
+            self.session.rollback()
+            raise
 
-        get_user_id_stmt = (
-            "SELECT id FROM users "
-            "WHERE discord_id = %s"
+    def _check_or_create_user(self):
+        self.user = (
+            self.session.query(User)
+            .filter_by(discord_id=self.discord_id)
+            .first()
         )
-        self.cursor.execute(get_user_id_stmt, (self.discord_id,))
-        self.user_id = self.cursor.fetchone()[0]
+        if not self.user:
+            self.user = User(discord_id=self.discord_id, username=self.username)
+            self.session.add(self.user)
+            self._safe_commit()
+        elif self.user.username != self.username:
+            self.user.username = self.username
+            self._safe_commit()
 
-        check_server_user_stmt = (
-            "SELECT server_id, user_id FROM server_users "
-            "WHERE server_id = %s AND user_id = %s"
+    def _check_or_create_server(self):
+        self.server = (
+            self.session.query(Server)
+            .filter_by(host_id=self.host_id)
+            .first()
         )
-        data = (self.server_id, self.user_id)
-        self.cursor.execute(check_server_user_stmt, data)
-        result = self.cursor.fetchone()
+        if not self.server:
+            self.server = Server(host_id=self.host_id, server_name=self.server_name)
+            self.session.add(self.server)
+            self._safe_commit()
+        elif self.server.server_name != self.server_name:
+            self.server.server_name = self.server_name
+            self._safe_commit()
 
-        if result is None:
-            add_user_server_stmt = (
-                "INSERT INTO server_users (server_id, user_id) "
-                "VALUES (%s, %s)"
-            )
-            data = (self.server_id, self.user_id)
-            self.cursor.execute(add_user_server_stmt, data)
-            self.cnx.commit()
-            
-            update_server_players_stmt = (
-                "UPDATE servers SET total_players = total_players + 1 "
-                "WHERE id = %s"
-            )
-            self.cursor.execute(update_server_players_stmt, (self.server_id,))
-            self.cnx.commit()
-    
-    def _update_nickname(self):
-        update_stmt = (
-            "UPDATE users SET username = %s "
-            "WHERE id = %s"
+    def _check_or_create_server_user(self):
+        self.server_user = (
+            self.session.query(ServerUser)
+            .filter_by(server_id=self.server.id, user_id=self.user.id)
+            .first()
         )
-        data = (self.username, self.user_id)
-        self.cursor.execute(update_stmt, data)
-        self.cnx.commit()
-    
-    def _update_server_name(self):
-        update_server_name_stmt = (
-            "UPDATE servers SET server_name = %s "
-            "WHERE id = %s"
-        )
-        data = (self.server_name, self.server_id)
-        self.cursor.execute(update_server_name_stmt, data)
-        self.cnx.commit()
-    
-    def initialize_game(self, small_blind, big_blind, starting_stack):
+        if not self.server_user:
+            self.server_user = ServerUser(
+                server_id=self.server.id, user_id=self.user.id
+            )
+            self.session.add(self.server_user)
+            self.server.total_players += 1
+            self._safe_commit()
+
+    def initialize_game(self, small_blind: int, big_blind: int, starting_stack: int):
         if not DATABASE_EXISTS:
             return
-        self.big_blind = big_blind
-        self.game_starting_stack = starting_stack
-        add_game_stmt = (
-            "INSERT INTO games (server_id, user_id, small_blind, big_blind, starting_stack, bot_version) "
-            "VALUES (%s, %s, %s, %s, %s, %s)"
+        self.big_blind = Decimal(big_blind)
+        self.game_starting_stack = Decimal(starting_stack)
+        self.game = Game(
+            server_id=self.server.id,
+            user_id=self.user.id,
+            small_blind=small_blind,
+            big_blind=big_blind,
+            starting_stack=starting_stack,
+            bot_version="v2.0.0",
         )
-        data = (self.server_id, self.user_id, small_blind, big_blind, starting_stack, 'v1.0.0')
-        self.cursor.execute(add_game_stmt, data)
-        self.game_id = self.cursor.lastrowid
-        self.cnx.commit()
+        self.session.add(self.game)
+        self._safe_commit()
 
-    def initialize_hand(self, cards, gpt_cards, starting_stack):
+    def initialize_hand(self, cards: str, gpt_cards: str, starting_stack: int):
         if not DATABASE_EXISTS:
             return
-        self.hand_starting_stack = starting_stack
-        # Inserting the new hand
-        add_hand_stmt = (
-            "INSERT INTO hands (server_id, user_id, game_id, cards, gpt_cards, starting_stack) "
-            "VALUES (%s, %s, %s, %s, %s, %s)"
+        self.hand_starting_stack = Decimal(starting_stack)
+        self.hand = Hand(
+            server_id=self.server.id,
+            user_id=self.user.id,
+            game_id=self.game.id,
+            cards=cards,
+            gpt_cards=gpt_cards,
+            starting_stack=starting_stack,
         )
-        data = (self.server_id, self.user_id, self.game_id, cards, gpt_cards, starting_stack)
-        self.cursor.execute(add_hand_stmt, data)
-        self.hand_id = self.cursor.lastrowid
+        self.session.add(self.hand)
+        self.game.total_hands += 1
+        self._safe_commit()
 
-        # Updating the total_hands count for the game
-        update_total_hands_stmt = (
-            "UPDATE games SET total_hands = total_hands + 1 "
-            "WHERE id = %s"
-        )
-        self.cursor.execute(update_total_hands_stmt, (self.game_id,))
-        self.cnx.commit()
-
-    def end_hand(self, ending_stack, end_round):
+    def end_hand(self, ending_stack: int, end_round: Round):
         if not DATABASE_EXISTS:
             return
-        net_bb = (ending_stack - self.hand_starting_stack) / self.big_blind
-        net_bb = round(net_bb, 2)
+
+        delta = Decimal(ending_stack) - self.hand_starting_stack
+        net_bb = (delta / self.big_blind).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
         if net_bb > 0:
-            result = "win"
+            result = HandResult.WIN
             self._update_wins(net_bb)
         elif net_bb < 0:
-            result = "loss"
+            result = HandResult.LOSS
             self._update_losses(abs(net_bb))
         else:
-            result = 'split pot'
+            result = HandResult.SPLIT_POT
             self._update_draws()
-        
-        update_hand_stmt = (
-            "UPDATE hands SET ending_stack = %s, net_bb = %s, result = %s, end_round = %s "
-            "WHERE id = %s"
-        )
-        data = (ending_stack, net_bb, result, end_round, self.hand_id)
-        self.cursor.execute(update_hand_stmt, data)
-        self.cnx.commit()
-    
-    def end_game(self, ending_stack):
+
+        self.hand.ending_stack = ending_stack
+        self.hand.net_bb = net_bb
+        self.hand.result = result
+        self.hand.end_round = end_round
+        self._safe_commit()
+
+    def end_game(self, ending_stack: int):
         if not DATABASE_EXISTS:
             return
-        net_bb = (ending_stack - self.game_starting_stack) / self.big_blind
-        net_bb = round(net_bb, 2)
-        if net_bb == 100:
-            result = 'complete win'
+        delta = Decimal(ending_stack) - self.game_starting_stack
+        net_bb = (delta / self.big_blind).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+        if net_bb == Decimal(100):
+            result = GameResult.COMPLETE_WIN
         elif net_bb > 0:
-            result = 'win'
-        elif net_bb == -100:
-            result = 'complete loss'
+            result = GameResult.WIN
+        elif net_bb == Decimal(-100):
+            result = GameResult.COMPLETE_LOSS
         elif net_bb < 0:
-            result = 'loss'
-        elif net_bb == 0:
-            result = 'draw'
+            result = GameResult.LOSS
+        else:
+            result = GameResult.DRAW
 
-        update_game_stmt = (
-            "UPDATE games SET end_timestamp = NOW(), ending_stack = %s, net_bb = %s, result = %s "
-            "WHERE id = %s"
-        )
-        data = (ending_stack, net_bb, result, self.game_id)
-        self.cursor.execute(update_game_stmt, data)
+        self.game.end_timestamp = datetime.now()
+        self.game.ending_stack = ending_stack
+        self.game.net_bb = net_bb
+        self.game.result = result
+        self._safe_commit()
+
+        duration = (self.game.end_timestamp - self.game.timestamp).total_seconds()
+        duration = Decimal(duration).quantize(Decimal("0.01"))
+
+        self.user.total_time_played += duration
+        self.user.total_games += 1
+        self.server.total_time_played += duration
         
-        # Get the start timestamp of the game
-        get_game_start_time_stmt = (
-            "SELECT timestamp, end_timestamp FROM games WHERE id = %s"
-        )
-        self.cursor.execute(get_game_start_time_stmt, (self.game_id,))
-        timestamps = self.cursor.fetchone()
-        
-        time_diff = round((timestamps[1] - timestamps[0]).total_seconds())
-        
-        # Update the user's total_time_played
-        update_user_time_spent_stmt = (
-            "UPDATE users SET total_time_played = total_time_played + %s WHERE id = %s"
-        )
-        self.cursor.execute(update_user_time_spent_stmt, (time_diff, self.user_id))
-        
-        # Update the server's total_time_played
-        update_server_time_spent_stmt = (
-            "UPDATE servers SET total_time_played = total_time_played + %s WHERE id = %s"
-        )
-        self.cursor.execute(update_server_time_spent_stmt, (time_diff, self.server_id))
-        
-        # Update the total games played by the user
-        update_user_games_stmt = (
-            "UPDATE users SET total_games = total_games + 1 WHERE id = %s"
-        )
-        self.cursor.execute(update_user_games_stmt, (self.user_id,))
-        
-        self.cnx.commit()
-    
-    def _update_wins(self, net_bb_wins):
-        # Update servers table for win
-        server_update_query = (
-            "UPDATE servers SET total_hands = total_hands + 1, total_wins = total_wins + 1, "
-            "net_bb_wins = net_bb_wins + %s, net_bb_total = net_bb_total + %s WHERE id = %s"
-        )
-        self.cursor.execute(server_update_query, (net_bb_wins, net_bb_wins, self.server_id))
+        self._safe_commit()
 
-        # Update users table for win
-        user_update_query = (
-            "UPDATE users SET total_hands = total_hands + 1, total_wins = total_wins + 1, "
-            "current_win_streak = current_win_streak + 1, "
-            "highest_win_streak = GREATEST(highest_win_streak, current_win_streak + 1), "
-            "current_loss_streak = 0, "
-            "net_bb_wins = net_bb_wins + %s, net_bb_total = net_bb_total + %s WHERE id = %s"
+    def _update_wins(self, net_bb: Decimal):
+        self.server.total_hands += 1
+        self.server.total_wins += 1
+        self.server.net_bb_wins += net_bb
+        self.server.net_bb_total += net_bb
+
+        self.user.total_hands += 1
+        self.user.total_wins += 1
+        self.user.current_win_streak += 1
+        self.user.highest_win_streak = max(
+            self.user.highest_win_streak, self.user.current_win_streak
         )
-        self.cursor.execute(user_update_query, (net_bb_wins, net_bb_wins, self.user_id))
+        self.user.current_loss_streak = 0
+        self.user.net_bb_wins += net_bb
+        self.user.net_bb_total += net_bb
 
-        # Update server_users table for win
-        server_user_update_query = (
-            "UPDATE server_users SET total_hands_on_server = total_hands_on_server + 1, "
-            "net_bb_wins_on_server = net_bb_wins_on_server + %s, "
-            "net_bb_total_on_server = net_bb_total_on_server + %s "
-            "WHERE server_id = %s AND user_id = %s"
+        self.server_user.total_hands_on_server += 1
+        self.server_user.net_bb_wins_on_server += net_bb
+        self.server_user.net_bb_total_on_server += net_bb
+
+        self._safe_commit()
+
+    def _update_losses(self, net_bb: Decimal):
+        self.server.total_hands += 1
+        self.server.total_losses += 1
+        self.server.net_bb_losses += net_bb
+        self.server.net_bb_total -= net_bb
+
+        self.user.total_hands += 1
+        self.user.total_losses += 1
+        self.user.current_loss_streak += 1
+        self.user.highest_loss_streak = max(
+            self.user.highest_loss_streak, self.user.current_loss_streak
         )
-        self.cursor.execute(server_user_update_query, (net_bb_wins, net_bb_wins, self.server_id, self.user_id))
+        self.user.current_win_streak = 0
+        self.user.net_bb_losses += net_bb
+        self.user.net_bb_total -= net_bb
 
-        self.cnx.commit()
+        self.server_user.total_hands_on_server += 1
+        self.server_user.net_bb_losses_on_server += net_bb
+        self.server_user.net_bb_total_on_server -= net_bb
 
-    def _update_losses(self, net_bb_losses):
-        # Update servers table for loss
-        server_update_query = (
-            "UPDATE servers SET total_hands = total_hands + 1, total_losses = total_losses + 1, "
-            "net_bb_losses = net_bb_losses + %s, net_bb_total = net_bb_total - %s WHERE id = %s"
-        )
-        self.cursor.execute(server_update_query, (net_bb_losses, net_bb_losses, self.server_id))
+        self._safe_commit()
 
-        # Update users table for loss
-        user_update_query = (
-            "UPDATE users SET total_hands = total_hands + 1, total_losses = total_losses + 1, "
-            "current_loss_streak = current_loss_streak + 1, "
-            "highest_loss_streak = GREATEST(highest_loss_streak, current_loss_streak + 1), "
-            "current_win_streak = 0, "
-            "net_bb_losses = net_bb_losses + %s, net_bb_total = net_bb_total - %s WHERE id = %s"
-        )
-        self.cursor.execute(user_update_query, (net_bb_losses, net_bb_losses, self.user_id))
-
-        # Update server_users table for loss
-        server_user_update_query = (
-            "UPDATE server_users SET total_hands_on_server = total_hands_on_server + 1, "
-            "net_bb_losses_on_server = net_bb_losses_on_server + %s, "
-            "net_bb_total_on_server = net_bb_total_on_server - %s "
-            "WHERE server_id = %s AND user_id = %s"
-        )
-        self.cursor.execute(server_user_update_query, (net_bb_losses, net_bb_losses, self.server_id, self.user_id))
-
-        self.cnx.commit()
-  
     def _update_draws(self):
-        # Update servers table for draw
-        server_update_query = (
-            "UPDATE servers SET total_hands = total_hands + 1, total_draws = total_draws + 1 "
-            "WHERE id = %s"
-        )
-        self.cursor.execute(server_update_query, (self.server_id,))
+        self.server.total_hands += 1
+        self.server.total_draws += 1
 
-        # Reset both current_win_streak and current_loss_streak to 0 for user
-        user_update_query = (
-            "UPDATE users SET total_hands = total_hands + 1, total_draws = total_draws + 1, "
-            "current_win_streak = 0, current_loss_streak = 0 WHERE id = %s"
-        )
-        self.cursor.execute(user_update_query, (self.user_id,))
+        self.user.total_hands += 1
+        self.user.total_draws += 1
+        self.user.current_win_streak = 0
+        self.user.current_loss_streak = 0
 
-        # Update server_users table for draw
-        server_user_update_query = (
-            "UPDATE server_users SET total_hands_on_server = total_hands_on_server + 1 "
-            "WHERE server_id = %s AND user_id = %s"
-        )
-        self.cursor.execute(server_user_update_query, (self.server_id, self.user_id))
+        self.server_user.total_hands_on_server += 1
 
-        self.cnx.commit()
+        self._safe_commit()
 
-    def update_community_cards(self, community_cards):
+    def update_community_cards(self, community_cards: str):
         if not DATABASE_EXISTS:
             return
-        update_community_cards_stmt = (
-            "UPDATE hands SET community_cards = %s "
-            "WHERE id = %s"
-        )
-        data = (community_cards, self.hand_id)
-        self.cursor.execute(update_community_cards_stmt, data)
-        self.cnx.commit()
-    
-    def record_gpt_action(self, action_type, raise_amount, json_data):
+        self.hand.community_cards = community_cards
+        self._safe_commit()
+
+    def record_gpt_action(self, action_type: str, raise_amount: int | None, json_data: str):
+        # TODO: Use Enum for action_type
         if not DATABASE_EXISTS:
             return
-        
-        action_type = action_type.lower()
-        if action_type not in ['call', 'check', 'fold', 'raise', 'all-in']:
-            raise ValueError("Invalid action type")
-        
-        if raise_amount == 0:
-            raise_amount = None
             
-        insert_stmt = (
-            "INSERT INTO gpt_actions (user_id, game_id, hand_id, action_type, raise_amount, json_data) "
-            "VALUES (%s, %s, %s, %s, %s, %s)"
-        )
-        data = (self.user_id, self.game_id, self.hand_id, action_type, raise_amount, json_data)
-        self.cursor.execute(insert_stmt, data)
-        self.cnx.commit()
-    
-    def get_top_players(self, limit=10):
-        top_players_query = (
-            "SELECT username, net_bb_total FROM users "
-            "ORDER BY net_bb_total DESC "
-            "LIMIT %s"
-        )
-        self.cursor.execute(top_players_query, (limit,))
-        return self.cursor.fetchall()
-    
-    def get_user_stats_of_player(self):
-        user_stats_query = (
-            "SELECT total_hands, total_games, total_time_played, "
-            "net_bb_total, net_bb_wins, net_bb_losses, "
-            "total_wins, total_losses, total_draws, "
-            "highest_win_streak, highest_loss_streak "
-            "FROM users WHERE discord_id = %s"
-        )
+        action_type = action_type.lower()
+        if action_type not in ActionType._value2member_map_:
+            raise ValueError(f"Invalid action type: {action_type}")
         
-        self.cursor.execute(user_stats_query, (self.discord_id,))
-        return self.cursor.fetchone()
+        action = GPTAction(
+            user_id=self.user.id,
+            game_id=self.game.id,
+            hand_id=self.hand.id,
+            action_type=action_type,
+            raise_amount=raise_amount,
+            json_data=json_data,
+        )
+        self.session.add(action)
+        self._safe_commit()
+
+    def get_top_players(self, limit=10):
+        return self.session.query(User.username, User.net_bb_total).order_by(User.net_bb_total.desc()).limit(limit).all()
+
+    def get_user_stats_of_player(self):
+        return self.session.query(
+            User.total_hands, User.total_games, User.total_time_played,
+            User.net_bb_total, User.net_bb_wins, User.net_bb_losses,
+            User.total_wins, User.total_losses, User.total_draws,
+            User.highest_win_streak, User.highest_loss_streak
+        ).filter_by(discord_id=self.discord_id).first()
 
     def get_user_place(self):
-        get_user_place_query = (
-            "SELECT COUNT(*) + 1 FROM users "
-            "WHERE net_bb_total > (SELECT net_bb_total FROM users WHERE discord_id = %s)"
-        )
-        self.cursor.execute(get_user_place_query, (self.discord_id,))
-        result = self.cursor.fetchone()
-        if result:
-            return result[0]
-        return None
-    
+        subquery = self.session.query(User.net_bb_total).filter_by(discord_id=self.discord_id).scalar_subquery()
+        return self.session.query(func.count(User.id)).filter(User.net_bb_total > subquery).scalar() + 1
+
     def get_user_stats_by_username(self, username):
-        user_stats_query = (
-            "SELECT total_hands, total_games, total_time_played, "
-            "net_bb_total, net_bb_wins, net_bb_losses, "
-            "total_wins, total_losses, total_draws, "
-            "highest_win_streak, highest_loss_streak "
-            "FROM users WHERE username = %s"
-        )
-        self.cursor.execute(user_stats_query, (username,))
-        return self.cursor.fetchone()
-    
+        return self.session.query(
+            User.total_hands, User.total_games, User.total_time_played,
+            User.net_bb_total, User.net_bb_wins, User.net_bb_losses,
+            User.total_wins, User.total_losses, User.total_draws,
+            User.highest_win_streak, User.highest_loss_streak
+        ).filter_by(username=username).first()
+
     def get_top_servers(self, limit=10):
-        top_servers_query = (
-            "SELECT server_name, net_bb_wins "
-            "FROM servers ORDER BY net_bb_wins DESC LIMIT %s;")
-        self.cursor.execute(top_servers_query, (limit,))
-        return self.cursor.fetchall()
+        return self.session.query(Server.server_name, Server.net_bb_wins).order_by(Server.net_bb_wins.desc()).limit(limit).all()
 
     def get_server_stats(self):
-        server_stats_query = (
-            "SELECT total_players, total_hands, total_time_played, "
-            "net_bb_total, net_bb_wins, net_bb_losses, "
-            "total_wins, total_losses, total_draws "
-            "FROM servers WHERE host_id = %s;"
-        )
-        self.cursor.execute(server_stats_query, (self.host_id,))
-        return self.cursor.fetchone()
-    
+        return self.session.query(
+            Server.total_players, Server.total_hands, Server.total_time_played,
+            Server.net_bb_total, Server.net_bb_wins, Server.net_bb_losses,
+            Server.total_wins, Server.total_losses, Server.total_draws
+        ).filter_by(host_id=self.host_id).first()
+
     def get_server_place(self):
-        server_place_query = (
-            "SELECT COUNT(*) + 1 "
-            "FROM servers "
-            "WHERE net_bb_wins > (SELECT net_bb_wins FROM servers WHERE host_id = %s)"
-        )        
-        self.cursor.execute(server_place_query, (self.host_id,))
-        return self.cursor.fetchone()[0]
-    
+        subquery = self.session.query(Server.net_bb_wins).filter_by(host_id=self.host_id).scalar_subquery()
+        return self.session.query(func.count(Server.id)).filter(Server.net_bb_wins > subquery).scalar() + 1
+
     def get_server_stats_by_name(self, server_name):
-        server_stats_query = (
-            "SELECT total_players, total_hands, total_time_played, "
-            "net_bb_total, net_bb_wins, net_bb_losses, "
-            "total_wins, total_losses, total_draws "
-            "FROM servers WHERE server_name = %s;"
-        )
-        self.cursor.execute(server_stats_query, (server_name,))
-        return self.cursor.fetchone()
+        return self.session.query(
+            Server.total_players, Server.total_hands, Server.total_time_played,
+            Server.net_bb_total, Server.net_bb_wins, Server.net_bb_losses,
+            Server.total_wins, Server.total_losses, Server.total_draws
+        ).filter_by(server_name=server_name).first()
 
     def close(self):
-        if DATABASE_EXISTS:
-            self.cursor.close()
-            self.cnx.close()
+        self.session.close()
