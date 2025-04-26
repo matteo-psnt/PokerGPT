@@ -167,6 +167,7 @@ class DatabaseManager:
         self.server.total_time_played += duration
         
         self._safe_commit()
+        self.close()
 
     def _update_wins(self, net_bb: Decimal):
         self.server.total_hands += 1

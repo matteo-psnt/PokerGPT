@@ -101,12 +101,11 @@ async def play_poker(
     poker.new_round()
 
     session = Session()
+    
     db_mgr = DatabaseManager(session, ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
-    try:
-        handler = DiscordPokerManager(ctx, poker, db_mgr, small_cards, timeout=45)
-        await handler.play_round()
-    finally:
-        db_mgr.close()
+    handler = DiscordPokerManager(ctx, poker, db_mgr, small_cards, timeout=45)
+    
+    await handler.play_round()
 
 
 # Register leaderboard and stats commands only if DB is enabled

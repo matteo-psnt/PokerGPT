@@ -527,7 +527,7 @@ class DiscordPokerManager:
                 await self.pokerManager.user_all_in()
 
     class allInCallView(View):
-        def __init__(self, pokerManager):
+        def __init__(self, pokerManager: 'DiscordPokerManager'):
             super().__init__(timeout=pokerManager.timeout)
             self.responded = False
             self.ctx = pokerManager.ctx
@@ -564,7 +564,7 @@ class DiscordPokerManager:
                 await self.pokerManager.user_fold()
 
     class newRoundView(View):
-        def __init__(self, pokerManager):
+        def __init__(self, pokerManager: 'DiscordPokerManager'):
             super().__init__(timeout=pokerManager.timeout)
             self.responded = False
             self.ctx = pokerManager.ctx
