@@ -1,6 +1,4 @@
 from game.player import *
-from typing import List, Tuple
-
 
 class Dealer:
     def __init__(self, num_players: int, buy_in: int = 1000):
@@ -269,7 +267,7 @@ class PokerGameManager(Dealer):
         self.big_blind = big_blind
         self.button = 0
         self.current_action = 0
-        self.round = "preflop"
+        self.round = "pre-flop"
         self.current_pot = 0
         self.current_bet = 0
     
