@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from bot.gpt_player import GPTPlayer
 from game.poker import PokerGameManager
 from game.card import Card, Rank, Suit
-from db.enums import Round
+from db.enums import ActionType, Round
 
 @pytest.fixture
 def mock_db():
@@ -43,9 +43,9 @@ def test_extract_action_raise(mock_db, poker_game):
     
     action, amount = gpt_player._extract_action(json_string, poker_game)
     
-    assert action == "raise"
+    assert action == ActionType.RAISE
     assert amount == 30
-    mock_db.record_gpt_action.assert_called_once_with("raise", 30, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, 30, json_string)
 
 def test_extract_action_min_raise(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
@@ -65,9 +65,9 @@ def test_extract_action_min_raise(mock_db, poker_game):
     
     action, amount = gpt_player._extract_action(json_string, poker_game)
     
-    assert action == "raise"
+    assert action == ActionType.RAISE
     assert amount == 80  # Should be adjusted to min raise
-    mock_db.record_gpt_action.assert_called_once_with("raise", 80, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, 80, json_string)
 
 def test_extract_action_all_in(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
@@ -84,9 +84,9 @@ def test_extract_action_all_in(mock_db, poker_game):
     
     action, amount = gpt_player._extract_action(json_string, poker_game)
     
-    assert action == "all-in"
+    assert action == ActionType.ALL_IN
     assert amount == 1000  # Player's stack
-    mock_db.record_gpt_action.assert_called_once_with("all-in", 1000, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, 1000, json_string)
 
 def test_extract_action_no_raise(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
@@ -102,9 +102,9 @@ def test_extract_action_no_raise(mock_db, poker_game):
     
     action, amount = gpt_player._extract_action(json_string, poker_game)
     
-    assert action == "call"
+    assert action == ActionType.CALL
     assert amount is None
-    mock_db.record_gpt_action.assert_called_once_with("call", None, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, None, json_string)
 
 def test_extract_action_invalid_json(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
@@ -130,7 +130,7 @@ def test_pre_flop_small_blind(mock_chain, poker_game):
     
     action, amount = mock_chain.pre_flop_small_blind(poker_game)
     
-    assert action == "raise"
+    assert action == ActionType.RAISE
     assert amount == 30
     mock_chain.chain.invoke.assert_called_once()
 
@@ -145,7 +145,7 @@ def test_pre_flop_big_blind(mock_chain, poker_game):
     
     action, amount = mock_chain.pre_flop_big_blind(poker_game)
     
-    assert action == "raise"
+    assert action == ActionType.RAISE
     assert amount == 40
     mock_chain.chain.invoke.assert_called_once()
 
@@ -168,7 +168,7 @@ def test_first_to_act(mock_chain, poker_game):
     
     action, amount = mock_chain.first_to_act(poker_game)
     
-    assert action == "raise"
+    assert action == ActionType.RAISE
     assert amount == 50
     mock_chain.chain.invoke.assert_called_once()
 
@@ -190,7 +190,7 @@ def test_player_check(mock_chain, poker_game):
     
     action, amount = mock_chain.player_check(poker_game)
     
-    assert action == "check"
+    assert action == ActionType.CHECK
     assert amount is None
     mock_chain.chain.invoke.assert_called_once()
 
@@ -213,7 +213,7 @@ def test_player_raise(mock_chain, poker_game):
     
     action, amount = mock_chain.player_raise(poker_game)
     
-    assert action == "call"
+    assert action == ActionType.CALL
     assert amount is None
     mock_chain.chain.invoke.assert_called_once()
 
@@ -237,6 +237,6 @@ def test_player_all_in(mock_chain, poker_game):
     
     action, amount = mock_chain.player_all_in(poker_game)
     
-    assert action == "call"
+    assert action == ActionType.CALL
     assert amount is None
     mock_chain.chain.invoke.assert_called_once()
