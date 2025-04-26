@@ -1,3 +1,4 @@
+from db.enums import Round
 from game.player import *
 
 class Dealer:
@@ -93,7 +94,7 @@ class Dealer:
 
         # Check for four of a kind and return heightest kicker
         for i in range(len(all_cards) - 3):
-            if all_cards[i] == all_cards[i + 3]:
+            if all_cards[i].rank == all_cards[i + 3].rank:
                 hand_rank = handRank.FOUR_OF_A_KIND
                 hand_played = all_cards[i : i + 4]
                 if (all_cards[0] != all_cards[i]):
@@ -106,9 +107,9 @@ class Dealer:
         # Check for full house
         for i in range(len(all_cards) - 2):
             for i in range(len(all_cards) - 2):
-                if all_cards[i] == all_cards[i + 2]:
+                if all_cards[i].rank == all_cards[i + 2].rank:
                     for j in range(len(all_cards) - 1):
-                        if all_cards[j] == all_cards[j + 1] and all_cards[i] != all_cards[j]:
+                        if all_cards[j].rank == all_cards[j + 1].rank and all_cards[i].rank != all_cards[j].rank:
                             hand_rank = handRank.FULL_HOUSE
                             hand_played = all_cards[i : i + 3]
                             hand_played.append(all_cards[j])
@@ -162,7 +163,7 @@ class Dealer:
             
         # Check for heightest three of a kind and return heightest kicker
         for i in range(len(all_cards) - 2):
-            if all_cards[i] == all_cards[i + 2]:
+            if all_cards[i].rank == all_cards[i + 2].rank:
                 hand_rank = handRank.THREE_OF_A_KIND
                 hand_played = all_cards[i : i + 3]
                 if (all_cards[0] != all_cards[i] and all_cards[1] != all_cards[i]):
@@ -180,9 +181,9 @@ class Dealer:
 
         # Check for two pair and return heightest kicker
         for i in range(len(all_cards) - 1):
-            if all_cards[i] == all_cards[i + 1]:
+            if all_cards[i].rank == all_cards[i + 1].rank:
                 for j in range(i + 2, len(all_cards) - 1):
-                    if all_cards[j] == all_cards[j + 1]:
+                    if all_cards[j].rank == all_cards[j + 1].rank:
                         hand_rank = handRank.TWO_PAIR
                         hand_played = all_cards[i : i + 2]
                         hand_played.append(all_cards[j])
@@ -198,7 +199,7 @@ class Dealer:
         
         # Check for pair and return heightest kicker
         for i in range(len(all_cards) - 1):
-            if all_cards[i] == all_cards[i + 1]:
+            if all_cards[i].rank == all_cards[i + 1].rank:
                 hand_rank = handRank.PAIR
                 hand_played = all_cards[i : i + 2]
                 if (all_cards[0] != all_cards[i] and all_cards[1] != all_cards[i] and all_cards[2] != all_cards[i]):
@@ -267,7 +268,7 @@ class PokerGameManager(Dealer):
         self.big_blind = big_blind
         self.button = 0
         self.current_action = 0
-        self.round = "pre-flop"
+        self.round = Round.PRE_FLOP
         self.current_pot = 0
         self.current_bet = 0
     
@@ -282,6 +283,7 @@ class PokerGameManager(Dealer):
         self.current_bet = 0
         self.button = (self.button + 1) % len(self.players)
         self.current_action = self.button
+        self.round = Round.PRE_FLOP
     
     def reset_betting(self):
         self.current_bet = 0

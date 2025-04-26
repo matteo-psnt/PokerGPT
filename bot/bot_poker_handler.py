@@ -5,18 +5,19 @@ from bot.card_display import get_cards
 from bot.gpt_player import GPTPlayer
 from config.log_config import logger
 from db.db_utils import DatabaseManager
+from db.enums import Round
 from game.poker import PokerGameManager
 
 
 class DiscordPokerManager:
     def __init__(self, ctx, pokerGame: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float,
-                 model_name: str = "gpt-3.5-turbo"):
+                 model_name: str = "gpt-4.1-nano"):
         self.ctx = ctx
-        self.pokerGame = pokerGame
-        self.db_manager = db_manager
-        self.small_cards = small_cards
-        self.timeout = timeout
-        self.model_name = model_name
+        self.pokerGame: PokerGameManager = pokerGame
+        self.db_manager: DatabaseManager = db_manager
+        self.small_cards: bool = small_cards
+        self.timeout: float = timeout
+        self.model_name: str = model_name
 
         db_manager.initialize_game(pokerGame.small_blind, pokerGame.big_blind, pokerGame.starting_stack)
 
@@ -30,7 +31,7 @@ class DiscordPokerManager:
 
     async def pre_flop(self):
         logger.info(f"{self.ctx.author.name} - Pre-flop")
-        self.pokerGame.round = "pre-flop"
+        self.pokerGame.round = Round.PRE_FLOP
         self.pokerGame.reset_betting()
         await self.ctx.send("**Your Cards:**")
         await self.ctx.send(get_cards(self.pokerGame.return_player_hand(0), self.small_cards))
@@ -122,20 +123,20 @@ class DiscordPokerManager:
                 logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
                 await self.pokerGPT_fold()
 
-    async def deal_community_cards(self, round_name: str):
+    async def deal_community_cards(self, round_name: Round):
         # Set the current round and deal the community cards
         self.pokerGame.round = round_name
         self.pokerGame.reset_betting()
-        if round_name == "flop":
+        if round_name == Round.FLOP:
             self.pokerGame.deal_board(3)
-        elif round_name == "turn":
+        elif round_name == Round.TURN:
             self.pokerGame.deal_board(4)
-        elif round_name == "river":
+        elif round_name == Round.RIVER:
             self.pokerGame.deal_board(5)
 
         # Announce the community cards
-        logger.info(f"{self.ctx.author.name} - {round_name.capitalize()} {self.pokerGame.return_community_cards()}")
-        await self.ctx.send(f"**Community Cards ({round_name.capitalize()}):**")
+        logger.info(f"{self.ctx.author.name} - {round_name.value.capitalize()} {self.pokerGame.return_community_cards()}")
+        await self.ctx.send(f"**Community Cards ({round_name.value.capitalize()}):**")
         await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
 
         # Announce the current pot and player stacks
@@ -151,7 +152,7 @@ class DiscordPokerManager:
 
     async def showdown(self):
         await self.ctx.send("***Showdown!!***")
-        self.pokerGame.round = "showdown"
+        self.pokerGame.round = Round.SHOWDOWN
         
         # Deal and Display the community cards
         self.pokerGame.deal_board(5)
@@ -191,7 +192,7 @@ class DiscordPokerManager:
 
         # Check if either player is out of chips
         self.db_manager.update_community_cards(self.pokerGame.return_community_cards())
-        self.db_manager.end_hand(self.pokerGame.return_player_stack(0), "showdown")
+        self.db_manager.end_hand(self.pokerGame.return_player_stack(0), Round.SHOWDOWN)
         embed = self.result_embed()
         if self.pokerGame.return_player_stack(0) == 0:
             await self.ctx.send(f"{self.pokerGame.players[1].player_name} wins the game! {self.pokerGame.players[0].player_name} is out of chips.", embeds=[embed])
@@ -312,18 +313,18 @@ class DiscordPokerManager:
 
     async def move_to_next_betting_round(self):
         self.pokerGame.current_action = self.pokerGame.button
-        if self.pokerGame.round == "pre-flop":
-            await self.deal_community_cards("flop")
-        elif self.pokerGame.round == "flop":
-            await self.deal_community_cards("turn")
-        elif self.pokerGame.round == "turn":
-            await self.deal_community_cards("river")
-        elif self.pokerGame.round == "river":
+        if self.pokerGame.round == Round.PRE_FLOP:
+            await self.deal_community_cards(Round.FLOP)
+        elif self.pokerGame.round == Round.FLOP:
+            await self.deal_community_cards(Round.TURN)
+        elif self.pokerGame.round == Round.TURN:
+            await self.deal_community_cards(Round.RIVER)
+        elif self.pokerGame.round == Round.RIVER:
             await self.showdown()
 
     async def next_action(self):
         self.pokerGame.current_action = (self.pokerGame.current_action + 1) % 2
-        if self.pokerGame.round == "pre-flop":
+        if self.pokerGame.round == Round.PRE_FLOP:
             if self.pokerGame.current_bet > self.pokerGame.big_blind:
                 await self.move_to_next_betting_round()
                 return

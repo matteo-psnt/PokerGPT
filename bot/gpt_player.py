@@ -8,7 +8,7 @@ from db.db_utils import DatabaseManager
 import json
 
 class GPTPlayer:
-    def __init__(self, db: DatabaseManager, model_name="gpt-3.5-turbo"):
+    def __init__(self, db: DatabaseManager, model_name="gpt-4.1-nano"):
         self.db = db
         llm = ChatOpenAI(model_name=model_name)
         output_parser = StrOutputParser()
@@ -33,9 +33,9 @@ class GPTPlayer:
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
         try:
             json_data = json.loads(json_string)
-            action = json_data['action'].capitalize()
-            raise_amount = 0
-            if action == "Raise":
+            action = json_data['action'].lower()
+            raise_amount = None
+            if action == "raise":
                 raise_amount = json_data['raise_amount']
                 raise_amount = int(raise_amount)
                 
@@ -43,7 +43,7 @@ class GPTPlayer:
                     raise_amount = min_raise
 
                 elif raise_amount > max_raise:
-                    action = "All-in"
+                    action = "all-in"
                     raise_amount = pokerGame.return_player_stack(1)
             self.db.record_gpt_action(action, raise_amount, json_string)
             return (action, raise_amount)
