@@ -191,3 +191,180 @@ async def test_result_embed_fields(discord_poker_manager, mock_ctx, poker_game):
     assert field_map["PokerGPT"] == "4321"
     assert field_map[mock_ctx.author.name] == "1234"
     
+@pytest.mark.asyncio
+async def test_preflop_gpt_cant_cover_small_blind_button0(mock_ctx, poker_game, mock_db_manager):
+    # button=0, GPT <= small_blind → GPT all-in on SB, user auto-calls → showdown
+    poker_game.button = 0
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[1].stack = 3  # ≤ SB
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.showdown = AsyncMock()
+
+    await m.pre_flop()
+
+    assert poker_game.players[1].round_pot_commitment == 3
+    assert poker_game.players[0].round_pot_commitment == 3
+    mock_ctx.send.assert_any_call(
+        "PokerGPT can't cover small blind and is __All-in for 3 chips.__"
+    )
+    mock_ctx.send.assert_any_call(f"{poker_game.players[0].player_name} calls.")
+    m.showdown.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_preflop_player_cant_cover_small_blind_button0(mock_ctx, poker_game, mock_db_manager):
+    # button=0, user ≤ SB → user all-in on SB, GPT auto-calls → showdown
+    poker_game.button = 0
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[0].stack = 4  # ≤ SB
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.showdown = AsyncMock()
+
+    await m.pre_flop()
+
+    assert poker_game.players[0].round_pot_commitment == 4
+    assert poker_game.players[1].round_pot_commitment == 4
+    mock_ctx.send.assert_any_call(
+        f"{poker_game.players[0].player_name} can't cover small blind and is __All-in for 4 chips.__"
+    )
+    mock_ctx.send.assert_any_call("PokerGPT calls.")
+    m.showdown.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_preflop_gpt_cant_cover_big_blind_button0(mock_ctx, poker_game, mock_db_manager):
+    # button=0, user ≥ SB but GPT ≤ BB → SB & partial-BB, prompt via allInCallView
+    poker_game.button = 0
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[0].stack = 100
+    poker_game.players[1].stack = 8   # ≤ BB, > SB
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.allInCallView = lambda *_: "ALLIN_VIEW"
+
+    await m.pre_flop()
+
+    assert poker_game.players[0].round_pot_commitment == 5
+    assert poker_game.players[1].round_pot_commitment == 8
+    mock_ctx.send.assert_any_call(
+        "What do you want to do? You are in for 5 chips, it costs 3 more to call.",
+        view="ALLIN_VIEW"
+    )
+
+@pytest.mark.asyncio
+async def test_preflop_player_cant_cover_big_blind_button0(mock_ctx, poker_game, mock_db_manager):
+    # button=0, user ≥ SB but ≤ BB → SB & partial-BB, prompt via allInCallView
+    poker_game.button = 0
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[0].stack = 7   # ≥ SB, ≤ BB
+    poker_game.players[1].stack = 100
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.allInCallView = lambda *_: "ALLIN_VIEW"
+
+    await m.pre_flop()
+
+    assert poker_game.players[0].round_pot_commitment == 5
+    assert poker_game.players[1].round_pot_commitment == 7
+    mock_ctx.send.assert_any_call(
+        "What do you want to do? You are in for 5 chips, it costs 2 more to call.",
+        view="ALLIN_VIEW"
+    )
+
+@pytest.mark.asyncio
+async def test_preflop_regular_button0_uses_call_view(mock_ctx, poker_game, mock_db_manager):
+    # button=0, both ≥ BB → normal SB/BB, prompt via callView
+    poker_game.button = 0
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[0].stack = 100
+    poker_game.players[1].stack = 100
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.callView = lambda *_: "CALL_VIEW"
+
+    await m.pre_flop()
+
+    assert poker_game.players[0].round_pot_commitment == 5
+    assert poker_game.players[1].round_pot_commitment == 10
+    mock_ctx.send.assert_any_call(
+        "What do you want to do? You are in for 5",
+        view="CALL_VIEW"
+    )
+
+@pytest.mark.asyncio
+async def test_preflop_player_cant_cover_small_blind_button1(mock_ctx, poker_game, mock_db_manager):
+    # button=1, user ≤ SB → user all-in on SB, GPT auto-calls → showdown
+    poker_game.button = 1
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[0].stack = 3
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.showdown = AsyncMock()
+
+    await m.pre_flop()
+
+    assert poker_game.players[0].round_pot_commitment == 3
+    assert poker_game.players[1].round_pot_commitment == 3
+    mock_ctx.send.assert_any_call(
+        f"{poker_game.players[0].player_name} can't cover small blind and is __All-in for 3 chips.__"
+    )
+    mock_ctx.send.assert_any_call("PokerGPT calls.")
+    m.showdown.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_preflop_gpt_cant_cover_small_blind_button1(mock_ctx, poker_game, mock_db_manager):
+    # button=1, GPT ≤ SB → GPT all-in on SB, user auto-calls → showdown
+    poker_game.button = 1
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[1].stack = 4
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.showdown = AsyncMock()
+
+    await m.pre_flop()
+
+    assert poker_game.players[1].round_pot_commitment == 4
+    assert poker_game.players[0].round_pot_commitment == 4
+    mock_ctx.send.assert_any_call(
+        "PokerGPT can't cover the small blind and is __All-in for 4 chips.__"
+    )
+    mock_ctx.send.assert_any_call(f"{poker_game.players[0].player_name} calls.")
+    m.showdown.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_preflop_player_cant_cover_big_blind_button1(mock_ctx, poker_game, mock_db_manager):
+    # button=1, user ≥ SB but ≤ BB → user all-in on BB, GPT auto-calls → showdown
+    poker_game.button = 1
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[0].stack = 7
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.showdown = AsyncMock()
+
+    await m.pre_flop()
+
+    assert poker_game.players[0].round_pot_commitment == 7
+    assert poker_game.players[1].round_pot_commitment == 7
+    mock_ctx.send.assert_any_call(
+        f"{poker_game.players[0].player_name} is __All-in for 7 chips.__"
+    )
+    mock_ctx.send.assert_any_call("PokerGPT __Calls.__")
+    m.showdown.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_preflop_gpt_cant_cover_big_blind_button1(mock_ctx, poker_game, mock_db_manager):
+    # button=1, GPT ≥ SB but ≤ BB → GPT all-in on BB, user auto-calls → showdown
+    poker_game.button = 1
+    poker_game.small_blind = 5
+    poker_game.big_blind = 10
+    poker_game.players[1].stack = 8
+    m = DiscordPokerManager(mock_ctx, poker_game, mock_db_manager, small_cards=False, timeout=1.0)
+    m.showdown = AsyncMock()
+
+    await m.pre_flop()
+
+    assert poker_game.players[1].round_pot_commitment == 8
+    assert poker_game.players[0].round_pot_commitment == 8
+    mock_ctx.send.assert_any_call("You put PokerGPT __All-in for 8 chips.__")
+    mock_ctx.send.assert_any_call("PokerGPT __Calls All-in.__")
+    m.showdown.assert_awaited_once()
