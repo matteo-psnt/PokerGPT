@@ -1,6 +1,5 @@
-import pytest
 from game.poker import Dealer
-from game.player import Player, handRank
+from game.player import handRank
 from game.card import Card, Rank, Suit
 
 def test_royal_flush():

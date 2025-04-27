@@ -97,19 +97,43 @@ def test_all_in_raise():
     # Current bet should be raised to the all-in amount
     assert game.current_bet == 60
 
-def test_return_min_max_raise():
-    game = PokerGameManager(buy_in=100)
-    
-    # Setup scenario
-    game.current_bet = 20
-    game.players[1].stack = 60
-    game.players[1].round_pot_commitment = 20
-    
-    # Get min and max raise
+@pytest.mark.parametrize("opp_stack,expected_max", [
+    (1000, 1000),    # equal stacks
+    (400,  400),     # opponent shorter
+])
+def test_return_min_max_raise(opp_stack, expected_max):
+    game = PokerGameManager()
+    game.current_bet = 50
+    game.players[1].stack = opp_stack
     min_raise, max_raise = game.return_min_max_raise(0)
-    
-    # Min raise should be twice the current bet
-    assert min_raise == 40  # 20 * 2
-    
-    # Max raise should be what the other player has committed plus what they can still commit
-    assert max_raise == 80  # 20 + 60
+    assert min_raise == 100                       # 50 * 2
+    assert max_raise == expected_max + game.players[1].round_pot_commitment
+
+def test_player_all_in_call_refund():
+    game = PokerGameManager()
+    game.current_bet = 200
+    # player 1 has bet 200 already
+    game.players[1].round_pot_commitment = 200
+    # player 0 is short – only 120 total left (20 already in pot)
+    game.players[0].round_pot_commitment = 20
+    game.players[0].stack = 100
+    starting_stack_p1 = game.players[1].stack
+
+    game.player_all_in_call(0)
+
+    # bet should drop to 120, diff refunded to player 1
+    assert game.current_bet == 120
+    assert game.players[0].stack == 0
+    assert game.players[0].round_pot_commitment == 120
+    assert game.players[1].round_pot_commitment == 120
+    assert game.players[1].stack == starting_stack_p1 + 80   # refund
+
+def test_player_win_split_list():
+    game = PokerGameManager()
+    game.current_pot = 100
+    p0, p1 = game.players
+    stack0, stack1 = p0.stack, p1.stack
+
+    game.player_win([p0, p1])      # split
+    assert p0.stack == stack0 + 50
+    assert p1.stack == stack1 + 50

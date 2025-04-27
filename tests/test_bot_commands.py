@@ -1,10 +1,10 @@
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 import discord
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 from bot.bot_poker_handler import DiscordPokerManager
-from game.poker import PokerGameManager
-from game.card import Card, Rank, Suit
 from db.enums import Round
+from game.card import Card, Rank, Suit
+from game.poker import PokerGameManager
 
 @pytest.fixture
 def mock_ctx():
@@ -176,3 +176,18 @@ async def test_player_wins_game(discord_poker_manager, mock_ctx, poker_game, moc
                 victory_message_sent = True
                 break
         assert victory_message_sent
+
+@pytest.mark.asyncio
+async def test_result_embed_fields(discord_poker_manager, mock_ctx, poker_game):
+    poker_game.players[0].stack = 1234
+    poker_game.players[1].stack = 4321
+
+    embed: discord.Embed = discord_poker_manager.result_embed()
+
+    assert embed.title == "Results"
+    assert len(embed.fields) == 2
+
+    field_map = {f.name: f.value for f in embed.fields}
+    assert field_map["PokerGPT"] == "4321"
+    assert field_map[mock_ctx.author.name] == "1234"
+    

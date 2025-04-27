@@ -36,12 +36,12 @@ class Card:
     
     # A bit dubious to use this method, but it works
     def __add__(self, other):
-        if type(other) == int:
-            new_rank = self.rank.value + other
-        elif type(other) == Rank:
-            new_rank = self.rank.value + other.value
-        elif type(other) == Card:
+        if isinstance(other, Card):
             new_rank = self.rank.value + other.rank.value
+        elif isinstance(other, Rank):
+            new_rank = self.rank.value + other.value
+        elif isinstance(other, int):
+            new_rank = self.rank.value + other
         else:
             raise TypeError(f"Cannot add Card with {type(other)}")
         

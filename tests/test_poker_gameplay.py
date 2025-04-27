@@ -1,6 +1,5 @@
-import pytest
 from game.poker import PokerGameManager
-from game.player import Player, handRank
+from game.player import handRank
 from game.card import Card, Rank, Suit
 from db.enums import Round
 

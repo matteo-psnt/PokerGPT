@@ -1,4 +1,3 @@
-import pytest
 from game.player import handRank
 
 def test_hand_rank_ordering():

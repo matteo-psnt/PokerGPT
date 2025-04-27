@@ -57,3 +57,20 @@ def test_deal_card():
     
     # The dealt card should not be in the deck anymore
     assert card not in deck.cards
+
+def test_deck_exhaustion():
+    deck = Deck()
+    for _ in range(52):
+        deck.deal_card()
+    with pytest.raises(IndexError):
+        deck.deal_card() # Expecting IndexError when trying to deal from an empty deck
+
+def test_shuffle_randomness(pytestconfig):
+    trials, changes = 1_000, 0
+    original = Deck().cards[0]
+    for _ in range(trials):
+        deck = Deck()
+        deck.shuffle()
+        if deck.cards[0] != original:
+            changes += 1
+    assert changes >= 950        # 95 % threshold

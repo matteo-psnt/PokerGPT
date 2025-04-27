@@ -53,3 +53,10 @@ def test_invalid_comparison():
     card = Card(Rank.ACE, Suit.SPADES)
     with pytest.raises(TypeError):
         card == "AS"
+      
+def test_card_add_wraps_mod_13():
+    base = Card(Rank.ACE, Suit.SPADES)
+    for k in range(26):  # Test values from 0 to 25
+        result_rank = base + k
+        expected_value = (base.rank.value + k) % 13
+        assert result_rank.value == expected_value
