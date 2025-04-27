@@ -69,48 +69,71 @@ To view server statistics, use the following command:
 
 ## Setup
 
-To set up the Poker Discord Bot in your Discord server, follow these steps:
+To set up the PokerGPT Discord Bot yourself, follow these steps:
 
-1. Create a new Discord application on the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Generate a bot token for your application.
-3. Invite the bot to your server using the generated invite link.
-4. Create a copy of the `.env_template` file and change the name to `.env`.
-5. In the `.env` file, replace the api keys with your own:
+1. Clone the repository and install dependencies:
 
-```plaintext
-DISCORD_TOKEN=your_discord_bot_token
-OPENAI_API_KEY=your_openai_api_key
-```
+    ```bash
+    git clone https://github.com/matteo-psnt/PokerGPT.git
+    cd PokerGPT
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
 
-6. Replace `your_discord_bot_token` with your Discord bot token.
-7. Replace `your_openai_api_key` with your OpenAI API key.
-8. (Optional) If you want to change the model used, open the `run_bot.py` file and update the model_name variable.
-9. Run the bot script on your preferred hosting environment.
-10. To host the card images, create a new Discord server.
-11. Add the bot to the server where you want to host the images.
-12. In the server where the bot is hosted, import all the images in the `split_deck_images` folder as emojis.
-13. Open the `bot/card_display.py` file and copy its contents.
-14. Paste the copied text into a Discord channel to obtain a unique identifier for each emoji.
-15. Replace the unique identifiers in the dictionary within the `bot/card_display.py` file.
-16. To verify proper functionality, check on a separate Discord server if the emojis are working correctly.
+2. Create a new Discord application on the [Discord Developer Portal](https://discord.com/developers/applications).
+   - Add a bot to your application and copy the bot token.
+3. Generate a bot token for your application.
+4. Invite the bot to your server using the generated invite link.
+5. Create a copy of the `.env_template` file and change the name to `.env`.
+6. In the `.env` file, fill in your Discord bot token and OpenAI API key:
 
-### Optional Database Setup
+    ```plaintext
+    DISCORD_TOKEN=your_discord_bot_token
+    OPENAI_API_KEY=your_openai_api_key
+    ```
 
-If you want to utilize the database features:
+7. (Optional) Enable Database Features
 
-1. Set up a MySQL server. If you don't have one, you can use services like [MySQL on AWS RDS](https://aws.amazon.com/rds/mysql/) or [MySQL on Azure](https://azure.microsoft.com/en-us/services/mysql/).
-2. Once your MySQL server is set up, execute the commands from the `db/database.sql` file to create the necessary database and tables.
+    To enable player/server statistics and leaderboards:
 
-3. In the `.env` file, uncomment (remove the `#` markers) and fill in the database configuration section:
+    Enter your MySQL credentials in `.env`:
 
-```plaintext
-DB_HOST=your_database_host
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
-DB_NAME=pokerGPTdatabase
-```
+    ```plaintext
+    DB_HOST=your_database_host
+    DB_USER=your_database_user
+    DB_PASSWORD=your_database_password
+    DB_NAME=pokerGPTdatabase
+    ```
 
-Replace the placeholders with your actual database details.
+    Initialize the database schema:
+
+    ```bash
+    python init_db.py
+    ```
+
+8. (Optional) Change the AI Model
+
+    To change the GPT model, edit the model_name variable in `bot/bot_poker_handler.py`.
+
+9. Run the bot:
+
+    ```bash
+    python run.py
+    ```
+
+    - Use `--no-db` flag to run the bot without database features.
+
+### Card Emoji Setup (For displaying cards in Discord)
+
+1. Create a new Discord server (this will host your card emojis).
+2. Add the bot to this server.
+3. Upload all images from the `split_deck_images` folder as custom emojis in this server.
+4. Get each emoji’s unique identifier:
+    - Open `bot/card_display.py` and find the emoji dictionary.
+    - In Discord, type each emoji (e.g., `:ace_of_spades:`) to see its identifier, or use a Discord utility bot to fetch emoji IDs.
+5. Update the emoji dictionary in `bot/card_display.py` with the correct emoji IDs from your server.
+6. Test in a Discord channel to verify the cards display properly.
 
 ## Contributions
 
