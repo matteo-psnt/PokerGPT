@@ -92,7 +92,7 @@ class Dealer:
             return hand_rank, hand_played
 
 
-        # Check for four of a kind and return heightest kicker
+        # Check for four of a kind and return highest kicker
         for i in range(len(all_cards) - 3):
             if all_cards[i].rank == all_cards[i + 3].rank:
                 hand_rank = handRank.FOUR_OF_A_KIND
@@ -161,7 +161,7 @@ class Dealer:
             return hand_rank, hand_played
         
             
-        # Check for heightest three of a kind and return heightest kicker
+        # Check for highest three of a kind and return highest kicker
         for i in range(len(all_cards) - 2):
             if all_cards[i].rank == all_cards[i + 2].rank:
                 hand_rank = handRank.THREE_OF_A_KIND
@@ -179,7 +179,7 @@ class Dealer:
                 return hand_rank, hand_played
         
 
-        # Check for two pair and return heightest kicker
+        # Check for two pair and return highest kicker
         for i in range(len(all_cards) - 1):
             if all_cards[i].rank == all_cards[i + 1].rank:
                 for j in range(i + 2, len(all_cards) - 1):
@@ -197,7 +197,7 @@ class Dealer:
                         return hand_rank, hand_played
               
         
-        # Check for pair and return heightest kicker
+        # Check for pair and return highest kicker
         for i in range(len(all_cards) - 1):
             if all_cards[i].rank == all_cards[i + 1].rank:
                 hand_rank = handRank.PAIR
