@@ -12,17 +12,13 @@ class Card:
         self.suit = suit
 
     def __eq__(self, other):
-        if type(other) == int:
-            return self.rank.value == other
-        elif type(other) == Rank:
+        if isinstance(other, Card):
+            return self.rank == other.rank and self.suit == other.suit
+        elif isinstance(other, Rank):
             return self.rank == other
-        elif type(other) == Card:
-            return self.rank == other.rank
-        else:
-            raise TypeError("Cannot compare Card and " + str(type(other)))
-
-    def __ne__(self, other):
-        return self.rank != other.rank
+        elif isinstance(other, int):
+            return self.rank.value == other
+        raise TypeError(f"Cannot compare Card with {type(other)}")
 
     def __lt__(self, other):
         if self.rank == Rank.ACE and other.rank != Rank.ACE:
@@ -40,14 +36,14 @@ class Card:
     
     # A bit dubious to use this method, but it works
     def __add__(self, other):
-        if type(other) == int:
-            new_rank = self.rank.value + other
-        elif type(other) == Rank:
-            new_rank = self.rank.value + other.value
-        elif type(other) == Card:
+        if isinstance(other, Card):
             new_rank = self.rank.value + other.rank.value
+        elif isinstance(other, Rank):
+            new_rank = self.rank.value + other.value
+        elif isinstance(other, int):
+            new_rank = self.rank.value + other
         else:
-            raise TypeError("Cannot add Card and " + str(type(other)))
+            raise TypeError(f"Cannot add Card with {type(other)}")
         
         if new_rank > 12:
             new_rank -= 13

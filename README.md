@@ -1,6 +1,7 @@
 # Poker Discord Bot - ChatGPT
 
 Welcome to the Poker Discord Bot powered by ChatGPT! This bot allows you to play a virtual game of Texas Hold'em poker with your friends right in your Discord server. The bot utilizes the ChatGPT-4 language model developed by OpenAI to provide an interactive and dynamic poker experience. The bot handles all aspects of the game, including dealing cards, managing bets, and determining winners. The bot also incorporates error handling to ensure a smooth user experience. To use the bot in your Discord server, either host the bot yourself using the setup instructions below or use the recomended method and invite the bot to your server using the generated invite link.
+
 ## Features
 
 - **Realistic Gameplay**: Play with realistic poker rules, including betting, folding, and raising.
@@ -48,7 +49,6 @@ To view player statistics, use the following command:
 
 ![Player Stats Command](docs/command_images/player_stats.png)
 
-
 ---
 
 To view the leaderboard for all servers, use the following command:
@@ -56,7 +56,6 @@ To view the leaderboard for all servers, use the following command:
 `/server_leaderboard`
 
 ![Server Leaderboard Command](docs/command_images/server_leaderboard.png)
-
 
 ---
 
@@ -70,49 +69,71 @@ To view server statistics, use the following command:
 
 ## Setup
 
-To set up the Poker Discord Bot in your Discord server, follow these steps:
+To set up the PokerGPT Discord Bot yourself, follow these steps:
 
-1. Create a new Discord application on the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Generate a bot token for your application.
-3. Invite the bot to your server using the generated invite link.
-4. Create a copy of the `.env_template` file and change the name to `.env`.
-5. In the `.env` file, replace the api keys with your own:
+1. Clone the repository and install dependencies:
 
-```plaintext
-DISCORD_TOKEN=your_discord_bot_token
-OPENAI_API_KEY=your_openai_api_key
-```
+    ```bash
+    git clone https://github.com/matteo-psnt/PokerGPT.git
+    cd PokerGPT
+    python3 -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
 
-6. Replace `your_discord_bot_token` with your Discord bot token.
-7. Replace `your_openai_api_key` with your OpenAI API key.
-8. (Optional) If you want to change the model used, open the `run_bot.py` file and update the model_name variable.
-9.  Run the bot script on your preferred hosting environment.
-10. To host the card images, create a new Discord server.
-11. Add the bot to the server where you want to host the images.
-12. In the server where the bot is hosted, import all the images in the `split_deck_images` folder as emojis.
-13. Open the `bot/card_display.py` file and copy its contents.
-14. Paste the copied text into a Discord channel to obtain a unique identifier for each emoji.
-15. Replace the unique identifiers in the dictionary within the `bot/card_display.py` file.
-16. To verify proper functionality, check on a separate Discord server if the emojis are working correctly.
-    
-### Optional Database Setup:
+2. Create a new Discord application on the [Discord Developer Portal](https://discord.com/developers/applications).
+   - Add a bot to your application and copy the bot token.
+3. Generate a bot token for your application.
+4. Invite the bot to your server using the generated invite link.
+5. Create a copy of the `.env_template` file and change the name to `.env`.
+6. In the `.env` file, fill in your Discord bot token and OpenAI API key:
 
-If you want to utilize the database features:
+    ```plaintext
+    DISCORD_TOKEN=your_discord_bot_token
+    OPENAI_API_KEY=your_openai_api_key
+    ```
 
-1. Set up a MySQL server. If you don't have one, you can use services like [MySQL on AWS RDS](https://aws.amazon.com/rds/mysql/) or [MySQL on Azure](https://azure.microsoft.com/en-us/services/mysql/).
-2. Once your MySQL server is set up, execute the commands from the `db/database.sql` file to create the necessary database and tables.
-   
-3. In the `.env` file, uncomment (remove the `#` markers) and fill in the database configuration section:
+7. (Optional) Enable Database Features
 
-```plaintext
-DB_HOST=your_database_host
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
-DB_NAME=pokerGPTdatabase
-```
+    To enable player/server statistics and leaderboards:
 
-Replace the placeholders with your actual database details.
+    Enter your MySQL credentials in `.env`:
 
+    ```plaintext
+    DB_HOST=your_database_host
+    DB_USER=your_database_user
+    DB_PASSWORD=your_database_password
+    DB_NAME=pokerGPTdatabase
+    ```
+
+    Initialize the database schema:
+
+    ```bash
+    python init_db.py
+    ```
+
+8. (Optional) Change the AI Model
+
+    To change the GPT model, edit the model_name variable in `bot/bot_poker_handler.py`.
+
+9. Run the bot:
+
+    ```bash
+    python run.py
+    ```
+
+    - Use `--no-db` flag to run the bot without database features.
+
+### Card Emoji Setup (For displaying cards in Discord)
+
+1. Create a new Discord server (this will host your card emojis).
+2. Add the bot to this server.
+3. Upload all images from the `split_deck_images` folder as custom emojis in this server.
+4. Get each emoji’s unique identifier:
+    - Open `bot/card_display.py` and find the emoji dictionary.
+    - In Discord, type each emoji (e.g., `:ace_of_spades:`) to see its identifier, or use a Discord utility bot to fetch emoji IDs.
+5. Update the emoji dictionary in `bot/card_display.py` with the correct emoji IDs from your server.
+6. Test in a Discord channel to verify the cards display properly.
 
 ## Contributions
 
