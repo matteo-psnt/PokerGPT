@@ -87,6 +87,10 @@ async def play_poker(
         small_cards: Option(bool, description="Use smaller card images", default=False) # type: ignore
 ):
     logger.info(f"{ctx.author} started game SB={small_blind} BB={big_blind}")
+    if ctx.guild is None:
+        logger.warning(f"DM command from {ctx.author}")
+        return await ctx.respond("This command cannot be used in DMs.", ephemeral=True)
+
     if small_blind > big_blind:
         return await ctx.respond("Small blind must be less than big blind.")
 
@@ -113,6 +117,10 @@ if not args.no_db:
     @bot.slash_command(name="player_leaderboard", description="Top 10 players by BB wins vs. PokerGPT")
     async def player_leaderboard(ctx):
         logger.info(f"{ctx.author} requested player leaderboard")
+        if ctx.guild is None:
+            logger.warning(f"DM command from {ctx.author}")
+            return await ctx.respond("This command cannot be used in DMs.", ephemeral=True)
+        
         session = Session()
         db_mgr = DatabaseManager(session, ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
         try:
@@ -142,6 +150,10 @@ if not args.no_db:
             username: Option(str, description="Player username", default="self") # type: ignore
     ):
         logger.info(f"{ctx.author} requested stats for {username}")
+        if ctx.guild is None:
+            logger.warning(f"DM command from {ctx.author}")
+            return await ctx.respond("This command cannot be used in DMs.", ephemeral=True)
+        
         session = Session()
         db_mgr = DatabaseManager(session, ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
         try:
@@ -172,6 +184,10 @@ if not args.no_db:
     @bot.slash_command(name="server_leaderboard", description="Top 10 servers by BB wins vs. PokerGPT")
     async def server_leaderboard(ctx):
         logger.info(f"{ctx.author} requested server leaderboard")
+        if ctx.guild is None:
+            logger.warning(f"DM command from {ctx.author}")
+            return await ctx.respond("This command cannot be used in DMs.", ephemeral=True)
+        
         session = Session()
         db_mgr = DatabaseManager(session, ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
         try:
@@ -201,6 +217,10 @@ if not args.no_db:
             server_name: Option(str, name="server_name", description="Server name", default="current server") # type: ignore
     ):
         logger.info(f"{ctx.author} requested server stats for {server_name}")
+        if ctx.guild is None:
+            logger.warning(f"DM command from {ctx.author}")
+            return await ctx.respond("This command cannot be used in DMs.", ephemeral=True)
+        
         session = Session()
         db_mgr = DatabaseManager(session, ctx.author.id, ctx.author.name, ctx.guild.id, ctx.guild.name)
         try:
