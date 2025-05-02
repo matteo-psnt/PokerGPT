@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from db.models import Base, User, Server, Game, Hand, ServerUser, GPTAction
 from db.enums import ActionType, GameResult, HandResult, Round
 from db.db_utils import DatabaseManager
+from decimal import Decimal
 
 @pytest.fixture
 def session():
@@ -149,3 +150,30 @@ def test_get_server_place(session, host, place):
     seed_servers(session)
     mgr = DatabaseManager(session, "uidX", "userX", host, host)  # user fields irrelevant
     assert mgr.get_server_place() == place
+
+def test_update_wins_and_losses(db_manager, session):
+    # Initialize game and hand
+    db_manager.initialize_game(small_blind=5, big_blind=10, starting_stack=1000)
+    db_manager.initialize_hand(cards="AsKs", gpt_cards="AhQh", starting_stack=1000)
+
+    # Test _update_wins
+    db_manager.end_hand(ending_stack=1100, end_round=Round.PRE_FLOP)
+    user = session.query(User).filter_by(discord_id="test_discord_id").first()
+    server = session.query(Server).filter_by(host_id="test_host_id").first()
+
+    assert user.net_bb_wins == Decimal(10)
+    assert user.net_bb_total == Decimal(10)
+    assert server.net_bb_wins == Decimal(10)
+    assert server.net_bb_total == Decimal(10)
+
+    # Test _update_losses
+    db_manager.initialize_hand(cards="AsKs", gpt_cards="AhQh", starting_stack=1000)
+    db_manager.end_hand(ending_stack=900, end_round=Round.PRE_FLOP)
+
+    user = session.query(User).filter_by(discord_id="test_discord_id").first()
+    server = session.query(Server).filter_by(host_id="test_host_id").first()
+
+    assert user.net_bb_losses == Decimal(10)
+    assert user.net_bb_total == Decimal(0)  # Wins (10) - Losses (10)
+    assert server.net_bb_losses == Decimal(10)
+    assert server.net_bb_total == Decimal(0)  # Wins (10) - Losses (10)

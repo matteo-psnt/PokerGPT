@@ -172,8 +172,8 @@ class DatabaseManager:
     def _update_wins(self, net_bb: Decimal):
         self.server.total_hands += 1
         self.server.total_wins += 1
-        self.server.net_bb_wins += net_bb
-        self.server.net_bb_total += net_bb
+        self.server.net_bb_wins = Decimal(self.server.net_bb_wins) + net_bb
+        self.server.net_bb_total = Decimal(self.server.net_bb_total) + net_bb
 
         self.user.total_hands += 1
         self.user.total_wins += 1
@@ -182,12 +182,12 @@ class DatabaseManager:
             self.user.highest_win_streak, self.user.current_win_streak
         )
         self.user.current_loss_streak = 0
-        self.user.net_bb_wins += net_bb
-        self.user.net_bb_total += net_bb
+        self.user.net_bb_wins = Decimal(self.user.net_bb_wins) + net_bb
+        self.user.net_bb_total = Decimal(self.user.net_bb_total) + net_bb
 
         self.server_user.total_hands_on_server += 1
-        self.server_user.net_bb_wins_on_server += net_bb
-        self.server_user.net_bb_total_on_server += net_bb
+        self.server_user.net_bb_wins_on_server = Decimal(self.server_user.net_bb_wins_on_server) + net_bb
+        self.server_user.net_bb_total_on_server = Decimal(self.server_user.net_bb_total_on_server) + net_bb
 
         self._safe_commit()
 
