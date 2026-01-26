@@ -1,7 +1,7 @@
 import json
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
-from langchain.prompts.chat import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from game.poker import PokerGameManager
 from db.db_utils import DatabaseManager
 from db.enums import ActionType
