@@ -106,15 +106,14 @@ class Dealer:
 
         # Check for full house
         for i in range(len(all_cards) - 2):
-            for i in range(len(all_cards) - 2):
-                if all_cards[i].rank == all_cards[i + 2].rank:
-                    for j in range(len(all_cards) - 1):
-                        if all_cards[j].rank == all_cards[j + 1].rank and all_cards[i].rank != all_cards[j].rank:
-                            hand_rank = handRank.FULL_HOUSE
-                            hand_played = all_cards[i : i + 3]
-                            hand_played.append(all_cards[j])
-                            hand_played.append(all_cards[j + 1])
-                            return hand_rank, hand_played
+            if all_cards[i].rank == all_cards[i + 2].rank:
+                for j in range(len(all_cards) - 1):
+                    if all_cards[j].rank == all_cards[j + 1].rank and all_cards[i].rank != all_cards[j].rank:
+                        hand_rank = handRank.FULL_HOUSE
+                        hand_played = all_cards[i : i + 3]
+                        hand_played.append(all_cards[j])
+                        hand_played.append(all_cards[j + 1])
+                        return hand_rank, hand_played
         
 
         # Check for flush

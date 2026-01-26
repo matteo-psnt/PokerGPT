@@ -1,10 +1,13 @@
 import json
+import logging
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from game.poker import PokerGameManager
 from db.db_utils import DatabaseManager
 from db.enums import ActionType
+
+logger = logging.getLogger(__name__)
 
 class GPTPlayer:
     def __init__(self, db: DatabaseManager, model_name="gpt-4.1-nano"):
@@ -48,8 +51,18 @@ class GPTPlayer:
             
             self.db.record_gpt_action(action, raise_amount, json_string)
             return (action, raise_amount)
-        except Exception as erro:
-            return ("Default", 0)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse GPT response as JSON: {e}")
+            return (ActionType.FOLD, None)
+        except KeyError as e:
+            logger.warning(f"Missing key in GPT response: {e}")
+            return (ActionType.FOLD, None)
+        except ValueError as e:
+            logger.warning(f"Invalid value in GPT response: {e}")
+            return (ActionType.FOLD, None)
+        except Exception as e:
+            logger.error(f"Unexpected error in GPT action extraction: {e}")
+            return (ActionType.FOLD, None)
 
 
     def pre_flop_small_blind(self, pokerGame: PokerGameManager):

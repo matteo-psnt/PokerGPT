@@ -23,7 +23,7 @@ def get_token(use_dev: bool):
     return DEV_TOKEN if use_dev and DEV_TOKEN else TOKEN
 
 
-DATABASE_URL = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_DATABASE}"
+DATABASE_URL = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_DATABASE}?charset=utf8mb4&collation=utf8mb4_general_ci"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Session = sessionmaker(bind=engine, expire_on_commit=False)
 

@@ -55,7 +55,7 @@ class Card:
         return f"{ranks[self.rank.value]}{suits[self.suit.value]}"
     
     def long_str(self):
-        suits = ["Spades", "Hearts", "Dimonds", "Clubs"]
+        suits = ["Spades", "Hearts", "Diamonds", "Clubs"]
         ranks = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"]
         return f"{ranks[self.rank.value]} of {suits[self.suit.value]}"
 

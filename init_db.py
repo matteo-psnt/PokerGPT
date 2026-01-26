@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from config.config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
 from db.models import Base
 
-DATABASE_URL = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_DATABASE}"
+DATABASE_URL = f"mysql+mysqlconnector://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_DATABASE}?charset=utf8mb4&collation=utf8mb4_general_ci"
 
 def init_db() -> None:
     engine = create_engine(DATABASE_URL, echo=True)
