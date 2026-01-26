@@ -1,4 +1,4 @@
-from game.card import *
+from game.card import Card, Rank, Suit
 
 # replace with your own custom emojis
 red_card_rank_tops = {

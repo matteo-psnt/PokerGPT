@@ -29,7 +29,7 @@ Session = sessionmaker(bind=engine, expire_on_commit=False)
 
 args = parse_args()
 token = get_token(args.dev)
-bot = discord.Bot()
+bot = discord.AutoShardedBot()
 
 
 @bot.event
