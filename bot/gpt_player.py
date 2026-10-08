@@ -10,9 +10,9 @@ from db.enums import ActionType
 logger = logging.getLogger(__name__)
 
 class GPTPlayer:
-    def __init__(self, db: DatabaseManager, model_name="gpt-4.1-nano"):
+    def __init__(self, db: DatabaseManager, model_name="gpt-5-nano"):
         self.db = db
-        llm = ChatOpenAI(model_name=model_name)
+        llm = ChatOpenAI(model_name=model_name, reasoning_effort="minimal")
         output_parser = StrOutputParser()
         template = '''
         Imagine you're a poker bot in a heads-up Texas Hold'em game. Your play is optimal, 
