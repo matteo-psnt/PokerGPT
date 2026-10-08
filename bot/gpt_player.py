@@ -1,13 +1,11 @@
 import json
-import logging
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from game.poker import PokerGameManager
 from db.db_utils import DatabaseManager
 from db.enums import ActionType
-
-logger = logging.getLogger(__name__)
+from config.log_config import logger
 
 class GPTPlayer:
     def __init__(self, db: DatabaseManager, model_name="gpt-6-luna"):
@@ -31,6 +29,14 @@ class GPTPlayer:
 
         self.chain = prompt | llm | output_parser
         
+    async def _ask(self, formatted_text: str) -> str:
+        # Returns "" on API errors so _extract_action falls back to the default move
+        try:
+            return await self.chain.ainvoke({'input': formatted_text})
+        except Exception as e:
+            logger.error(f"GPT request failed: {e}")
+            return ""
+
     def _extract_action(self, json_string, pokerGame: PokerGameManager):
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
         try:
@@ -65,7 +71,7 @@ class GPTPlayer:
             return (ActionType.FOLD, None)
 
 
-    def pre_flop_small_blind(self, pokerGame: PokerGameManager):
+    async def pre_flop_small_blind(self, pokerGame: PokerGameManager):
         # return Call, Raise, Fold or All-in
         inputs = {
             'small_blind': pokerGame.small_blind,
@@ -87,10 +93,10 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = self.chain.invoke({'input': formatted_text})
+        response = await self._ask(formatted_text)
         return self._extract_action(response, pokerGame)
 
-    def pre_flop_big_blind(self, pokerGame: PokerGameManager):
+    async def pre_flop_big_blind(self, pokerGame: PokerGameManager):
         # return Check, Raise, or All-in
         inputs = {
             'small_blind': pokerGame.small_blind,
@@ -98,24 +104,22 @@ class GPTPlayer:
             'stack': pokerGame.return_player_stack(1),
             'opponents_stack': pokerGame.return_player_stack(0),
             'hand': pokerGame.players[1].return_long_hand(),
-            'pot': pokerGame.current_pot,
-            'amount_to_call': pokerGame.big_blind - pokerGame.small_blind
+            'pot': pokerGame.current_pot
         }
 
         human_template = '''
         The small blind is {small_blind} chips and the big blind is {big_blind} chips.
         You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
         Your hand is {hand}. The pot is {pot} chips.
-        You are the small blind and it's your turn.
-        It costs {amount_to_call} chips to call.
+        You are the big blind and your opponent has called. It's your turn and you can check for free.
         What action would you take? (Check, Raise, or All-in)
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = self.chain.invoke({'input': formatted_text})
+        response = await self._ask(formatted_text)
         return self._extract_action(response, pokerGame)
     
-    def first_to_act(self, pokerGame: PokerGameManager):
+    async def first_to_act(self, pokerGame: PokerGameManager):
         # return Check, Raise, or All-in
         inputs = {
             'small_blind': pokerGame.small_blind,
@@ -137,10 +141,10 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = self.chain.invoke({'input': formatted_text})
+        response = await self._ask(formatted_text)
         return self._extract_action(response, pokerGame)
     
-    def player_check(self, pokerGame: PokerGameManager):
+    async def player_check(self, pokerGame: PokerGameManager):
         # return Check, Raise, or All-in
         inputs = {
             'small_blind': pokerGame.small_blind,
@@ -163,10 +167,10 @@ class GPTPlayer:
         
         formatted_text = human_template.format(**inputs)
 
-        response = self.chain.invoke({'input': formatted_text})
+        response = await self._ask(formatted_text)
         return self._extract_action(response, pokerGame)
     
-    def player_raise(self, pokerGame: PokerGameManager):
+    async def player_raise(self, pokerGame: PokerGameManager):
         # return Call, Raise, All-in, or Fold
         inputs = {
             'small_blind': pokerGame.small_blind,
@@ -193,10 +197,10 @@ class GPTPlayer:
 
         formatted_text = human_template.format(**inputs)
 
-        response = self.chain.invoke({'input': formatted_text})
+        response = await self._ask(formatted_text)
         return self._extract_action(response, pokerGame)  
 
-    def player_all_in(self, pokerGame: PokerGameManager):
+    async def player_all_in(self, pokerGame: PokerGameManager):
         # return Call, or Fold
         amount_to_call = pokerGame.current_bet - pokerGame.players[1].round_pot_commitment
         if amount_to_call > pokerGame.return_player_stack(1):
@@ -225,5 +229,5 @@ class GPTPlayer:
 
         formatted_text = human_template.format(**inputs)
         
-        response = self.chain.invoke({'input': formatted_text})
+        response = await self._ask(formatted_text)
         return self._extract_action(response, pokerGame)

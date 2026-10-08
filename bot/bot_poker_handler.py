@@ -1,5 +1,5 @@
 import discord
-from discord import ButtonStyle, Interaction
+from discord import ButtonStyle
 from discord.ui import InputText, View
 from bot.card_display import get_cards
 from bot.gpt_player import GPTPlayer
@@ -129,7 +129,7 @@ class DiscordPokerManager:
             self.pokerGame.player_raise(1, self.pokerGame.small_blind)
             self.pokerGame.player_raise(0, self.pokerGame.big_blind)
 
-            action, raise_amount = self.gpt_action.pre_flop_small_blind(self.pokerGame)
+            action, raise_amount = await self.gpt_action.pre_flop_small_blind(self.pokerGame)
             if action == ActionType.CALL:
                 logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
                 await self.ctx.send("PokerGPT __Calls.__")
@@ -232,7 +232,7 @@ class DiscordPokerManager:
         await self.ctx.send(f"What do you want to do?", view=view)
 
     async def pokerGPT_acts_first(self):
-        action, raise_amount = self.gpt_action.first_to_act(self.pokerGame)
+        action, raise_amount = await self.gpt_action.first_to_act(self.pokerGame)
 
         if action == ActionType.CHECK:
             logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
@@ -253,7 +253,7 @@ class DiscordPokerManager:
         self.pokerGame.player_raise(0, amount)
 
         # Get GPT's move and handle it
-        action, raise_amount = self.gpt_action.player_raise(self.pokerGame)
+        action, raise_amount = await self.gpt_action.player_raise(self.pokerGame)
 
         if action == ActionType.CALL:
             logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
@@ -290,7 +290,7 @@ class DiscordPokerManager:
     async def user_all_in(self):
         logger.info(f"{self.ctx.author.name} - User goes All-in")
         self.pokerGame.player_all_in_raise(0)
-        action, raise_amount = self.gpt_action.player_all_in(self.pokerGame)
+        action, raise_amount = await self.gpt_action.player_all_in(self.pokerGame)
 
         if action == ActionType.CALL:
             logger.info(f"{self.ctx.author.name} - PokerGPT Calls All-in.")
@@ -351,7 +351,7 @@ class DiscordPokerManager:
                 await self.move_to_next_betting_round()
                 return
             if self.pokerGame.button == 0:
-                action, raise_amount = self.gpt_action.pre_flop_big_blind(self.pokerGame)
+                action, raise_amount = await self.gpt_action.pre_flop_big_blind(self.pokerGame)
                 
                 if action == ActionType.CHECK:
                     logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
@@ -389,7 +389,7 @@ class DiscordPokerManager:
                 elif self.pokerGame.current_action == 0:
                     await self.move_to_next_betting_round()
             elif self.pokerGame.button == 1:
-                action, raise_amount = self.gpt_action.player_check(self.pokerGame)
+                action, raise_amount = await self.gpt_action.player_check(self.pokerGame)
 
                 if action == ActionType.CHECK:
                     logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
@@ -416,42 +416,53 @@ class DiscordPokerManager:
         return embed
 
     class raiseModal(discord.ui.Modal):
-        def __init__(self, pokerManager):
+        def __init__(self, pokerManager, parent_view: View):
             super().__init__(title="Raise", timeout=pokerManager.timeout)
             self.ctx = pokerManager.ctx
             self.pokerGame = pokerManager.pokerGame
             self.db_manager = pokerManager.db_manager
             self.pokerManager = pokerManager
+            # The button view that opened this modal; it only counts as answered once a valid raise is submitted
+            self.parent_view = parent_view
 
             self.add_item(InputText(label="Amount", value="", placeholder="Enter amount"))
 
-        async def callback(self, interaction: discord.Interaction):
-            if self.children[0]:
-                amount_raised = self.children[0].value
-                if not amount_raised.isdigit():
-                    await interaction.response.send_message("Please enter a valid number.")
-                    return
-                amount_raised = int(amount_raised)
-                if (amount_raised == self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment):
-                    await interaction.response.send_message("You are __All-in.__")
-                    await self.pokerManager.user_all_in()
-                    return
-                if (amount_raised > self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment):
-                    await interaction.response.send_message("You do not have enough chips.")
-                    return
-                if amount_raised < self.pokerGame.big_blind:
-                    await interaction.response.send_message("Raise must be at least the big blind.")
-                    return
-                if amount_raised < 2 * self.pokerGame.current_bet:
-                    await interaction.response.send_message("You must raise to at least double the current bet.")
-                    return
-                if (amount_raised >= self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment):
-                    opponent_stack = (self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment)
-                    await interaction.response.edit_message(content=f"You put PokerGPT __All-in for {opponent_stack} chips.__", view=None)
-                    await self.pokerManager.user_all_in()
+        def _lock_parent_view(self):
+            self.parent_view.responded = True
+            self.parent_view.stop()
 
-                await interaction.response.edit_message(content=f"You __Raise to {amount_raised} chips.__", view=None)
-                await self.pokerManager.user_raise(amount_raised)
+        async def callback(self, interaction: discord.Interaction):
+            if self.parent_view.is_finished():
+                await interaction.response.send_message("Too late, this action has already timed out.", ephemeral=True)
+                return
+            amount_raised = self.children[0].value
+            if not amount_raised.isdigit():
+                await interaction.response.send_message("Please enter a valid number.")
+                return
+            amount_raised = int(amount_raised)
+            if (amount_raised == self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment):
+                self._lock_parent_view()
+                await interaction.response.edit_message(content="You are __All-in.__", view=None)
+                await self.pokerManager.user_all_in()
+                return
+            if (amount_raised > self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment):
+                await interaction.response.send_message("You do not have enough chips.")
+                return
+            if amount_raised < self.pokerGame.big_blind:
+                await interaction.response.send_message("Raise must be at least the big blind.")
+                return
+            if amount_raised < 2 * self.pokerGame.current_bet:
+                await interaction.response.send_message("You must raise to at least double the current bet.")
+                return
+            self._lock_parent_view()
+            if (amount_raised >= self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment):
+                opponent_stack = (self.pokerGame.return_player_stack(1) + self.pokerGame.players[1].round_pot_commitment)
+                await interaction.response.edit_message(content=f"You put PokerGPT __All-in for {opponent_stack} chips.__", view=None)
+                await self.pokerManager.user_all_in()
+                return
+
+            await interaction.response.edit_message(content=f"You __Raise to {amount_raised} chips.__", view=None)
+            await self.pokerManager.user_raise(amount_raised)
 
     class callView(View):
         def __init__(self, pokerManager):
@@ -469,8 +480,10 @@ class DiscordPokerManager:
                 await self.pokerManager.user_fold()
 
         async def check(self, interaction: discord.Interaction):
-            if interaction.user:
-                return interaction.user.id == self.ctx.author.id
+            if interaction.user and interaction.user.id == self.ctx.author.id:
+                return True
+            await interaction.response.send_message("This isn't your game.", ephemeral=True)
+            return False
 
         @discord.ui.button(label="Call", style=ButtonStyle.blurple)
         async def call_button_callback(self, button, interaction):
@@ -478,31 +491,27 @@ class DiscordPokerManager:
                 logger.info(f"{self.ctx.author.name} - User Calls.")
                 self.responded = True
                 self.pokerGame.player_call(0)
-                if self.message:
-                    await self.message.edit(content="You __Call.__", view=None)
+                await interaction.response.edit_message(content="You __Call.__", view=None)
                 await self.pokerManager.next_action()
 
         @discord.ui.button(label="Raise", style=ButtonStyle.green)
         async def raise_button_callback(self, button, interaction):
             if await self.check(interaction):
-                self.responded = True
-                await interaction.response.send_modal(self.pokerManager.raiseModal(self.pokerManager))
+                await interaction.response.send_modal(self.pokerManager.raiseModal(self.pokerManager, self))
 
         @discord.ui.button(label="All-in", style=ButtonStyle.green)
         async def all_in_button_callback(self, button, interaction):
             if await self.check(interaction):
                 self.responded = True
-                if self.message:
-                    await self.message.edit(
-                        content=f"You are __All In for {self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
+                await interaction.response.edit_message(
+                    content=f"You are __All In for {self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
                 await self.pokerManager.user_all_in()
 
         @discord.ui.button(label="Fold", style=ButtonStyle.red)
         async def fold_button_callback(self, button, interaction):
             if await self.check(interaction):
                 self.responded = True
-                if self.message:
-                    await self.message.edit(content="You __Fold.__", view=None)
+                await interaction.response.edit_message(content="You __Fold.__", view=None)
                 await self.pokerManager.user_fold()
 
     class checkView(View):
@@ -522,30 +531,29 @@ class DiscordPokerManager:
                 await self.pokerManager.next_action()
 
         async def check(self, interaction: discord.Interaction):
-            if interaction.user:
-                return interaction.user.id == self.ctx.author.id
+            if interaction.user and interaction.user.id == self.ctx.author.id:
+                return True
+            await interaction.response.send_message("This isn't your game.", ephemeral=True)
+            return False
 
         @discord.ui.button(label="Check", style=ButtonStyle.blurple)
         async def call_button_callback(self, button, interaction):
             if await self.check(interaction):
                 logger.info(f"{self.ctx.author.name} - User Checks.")
                 self.responded = True
-                if self.message:
-                    await self.message.edit(content="You __Check.__", view=None)
+                await interaction.response.edit_message(content="You __Check.__", view=None)
                 await self.pokerManager.next_action()
 
         @discord.ui.button(label="Raise", style=ButtonStyle.green)
         async def raise_button_callback(self, button, interaction):
             if await self.check(interaction):
-                self.responded = True
-                await interaction.response.send_modal(self.pokerManager.raiseModal(self.pokerManager))
+                await interaction.response.send_modal(self.pokerManager.raiseModal(self.pokerManager, self))
 
         @discord.ui.button(label="All-in", style=ButtonStyle.green)
         async def all_in_button_callback(self, button, interaction):
             if await self.check(interaction):
                 self.responded = True
-                if self.message:
-                    await self.message.edit(content=f"You are __All-in for {self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
+                await interaction.response.edit_message(content=f"You are __All-in for {self.pokerGame.return_player_stack(0) + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
                 await self.pokerManager.user_all_in()
 
     class allInCallView(View):
@@ -564,16 +572,17 @@ class DiscordPokerManager:
                 await self.pokerManager.user_fold()
 
         async def check(self, interaction: discord.Interaction):
-            if interaction.user:
-                return interaction.user.id == self.ctx.author.id
+            if interaction.user and interaction.user.id == self.ctx.author.id:
+                return True
+            await interaction.response.send_message("This isn't your game.", ephemeral=True)
+            return False
 
         @discord.ui.button(label="Call All-in", style=ButtonStyle.blurple)
         async def call_button_callback(self, button, interaction):
             if await self.check(interaction):
                 logger.info(f"{self.ctx.author.name} - User Calls All-in.")
                 self.responded = True
-                if self.message:
-                    await self.message.edit(content="You __Call the All-in.__", view=None)
+                await interaction.response.edit_message(content="You __Call the All-in.__", view=None)
                 self.pokerGame.player_call(0)
                 await self.pokerManager.showdown()
 
@@ -581,8 +590,7 @@ class DiscordPokerManager:
         async def fold_button_callback(self, button, interaction):
             if await self.check(interaction):
                 self.responded = True
-                if self.message:
-                    await self.message.edit(content="You __Fold.__", view=None)
+                await interaction.response.edit_message(content="You __Fold.__", view=None)
                 await self.pokerManager.user_fold()
 
     class newRoundView(View):
@@ -601,16 +609,17 @@ class DiscordPokerManager:
                 if self.message:
                     await self.message.edit(content="*Game Ended*", view=None, embeds=[embed])
 
-        async def check(self, interaction: Interaction):
-            if interaction.user:
-                return interaction.user.id == self.ctx.author.id
+        async def check(self, interaction: discord.Interaction):
+            if interaction.user and interaction.user.id == self.ctx.author.id:
+                return True
+            await interaction.response.send_message("This isn't your game.", ephemeral=True)
+            return False
 
         @discord.ui.button(label="New Round", style=ButtonStyle.blurple)
         async def new_round_button_callback(self, button, interaction):
             if await self.check(interaction):
                 self.responded = True
-                if self.message:
-                    await self.message.edit(content="*Starting a new round.*", view=None)
+                await interaction.response.edit_message(content="*Starting a new round.*", view=None)
                 await self.pokerManager.play_round()
 
         @discord.ui.button(label="End Game", style=ButtonStyle.red)
@@ -619,5 +628,4 @@ class DiscordPokerManager:
                 self.responded = True
                 self.db_manager.end_game(self.pokerGame.return_player_stack(0))
                 embed = self.pokerManager.result_embed()
-                if self.message:
-                    await self.message.edit(content="*Game Ended*", view=None, embeds=[embed])
+                await interaction.response.edit_message(content="*Game Ended*", view=None, embeds=[embed])
