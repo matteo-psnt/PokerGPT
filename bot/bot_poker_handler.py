@@ -11,7 +11,7 @@ from game.poker import PokerGameManager
 
 class DiscordPokerManager:
     def __init__(self, ctx, pokerGame: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float,
-                 model_name: str = "gpt-5.6-luna"):
+                 model_name: str = "gpt-6-luna"):
         self.ctx = ctx
         self.pokerGame: PokerGameManager = pokerGame
         self.db_manager: DatabaseManager = db_manager

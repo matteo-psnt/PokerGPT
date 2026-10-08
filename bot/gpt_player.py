@@ -10,7 +10,7 @@ from db.enums import ActionType
 logger = logging.getLogger(__name__)
 
 class GPTPlayer:
-    def __init__(self, db: DatabaseManager, model_name="gpt-5.6-luna"):
+    def __init__(self, db: DatabaseManager, model_name="gpt-6-luna"):
         self.db = db
         llm = ChatOpenAI(model_name=model_name, reasoning_effort="none")
         output_parser = StrOutputParser()
