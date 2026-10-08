@@ -1,7 +1,8 @@
-import json
 import pytest
+import typing
+from pydantic import ValidationError
 from unittest.mock import AsyncMock, MagicMock, patch
-from bot.gpt_player import GPTPlayer
+from bot.gpt_player import GPTPlayer, FacingBetDecision, CanCheckDecision, FacingAllInDecision
 from db.enums import ActionType, Round
 from game.card import Card, Rank, Suit
 from game.poker import PokerGameManager
@@ -13,13 +14,11 @@ def mock_db():
     return db
 
 @pytest.fixture
-def mock_chain():
+def mocked_player():
     with patch('bot.gpt_player.ChatPromptTemplate'), \
-         patch('bot.gpt_player.ChatOpenAI'), \
-         patch('bot.gpt_player.StrOutputParser'):
+         patch('bot.gpt_player.ChatOpenAI'):
         gpt_player = GPTPlayer(MagicMock())
-        gpt_player.chain = MagicMock()
-        gpt_player.chain.ainvoke = AsyncMock()
+        gpt_player.chains = {schema: MagicMock(ainvoke=AsyncMock()) for schema in gpt_player.chains}
         return gpt_player
 
 @pytest.fixture
@@ -30,130 +29,112 @@ def poker_game():
     game.players[1].card2 = Card(Rank.KING, Suit.HEARTS)
     return game
 
-def test_extract_action_raise(mock_db, poker_game):
+def decision(schema, action, **fields):
+    return schema(
+        your_hand="Ace of Spades, King of Hearts",
+        opponents_hand="Unknown",
+        thought_process="Test reasoning",
+        action=action,
+        **fields
+    )
+
+def test_resolve_action_raise(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
-    
+
     # Test normal raise
-    json_string = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Possibly a medium pair",
-        "thought_process": "I have a strong starting hand, I should raise",
-        "action": "raise",
-        "raise_amount": 30
-    })
-    
-    action, amount = gpt_player._extract_action(json_string, poker_game)
-    
+    d = decision(FacingBetDecision, "raise", raise_amount=30)
+
+    action, amount = gpt_player._resolve_action(d, poker_game)
+
     assert action == ActionType.RAISE
     assert amount == 30
-    mock_db.record_gpt_action.assert_called_once_with(action, 30, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, 30, d.model_dump_json())
 
-def test_extract_action_min_raise(mock_db, poker_game):
+def test_resolve_action_min_raise(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
-    mock_db.reset_mock()
-    
+
     # Set current bet to make min raise higher
     poker_game.current_bet = 40
-    
+
     # Test raise below minimum (should be adjusted)
-    json_string = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Possibly a medium pair",
-        "thought_process": "I have a strong starting hand, I should raise",
-        "action": "raise",
-        "raise_amount": 50  # Min raise would be 80 (40 * 2)
-    })
-    
-    action, amount = gpt_player._extract_action(json_string, poker_game)
-    
+    d = decision(FacingBetDecision, "raise", raise_amount=50)  # Min raise would be 80 (40 * 2)
+
+    action, amount = gpt_player._resolve_action(d, poker_game)
+
     assert action == ActionType.RAISE
     assert amount == 80  # Should be adjusted to min raise
-    mock_db.record_gpt_action.assert_called_once_with(action, 80, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, 80, d.model_dump_json())
 
-def test_extract_action_all_in(mock_db, poker_game):
+def test_resolve_action_raise_without_amount_uses_min_raise(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
-    mock_db.reset_mock()
-    
+    poker_game.current_bet = 40
+
+    action, amount = gpt_player._resolve_action(decision(FacingBetDecision, "raise", raise_amount=None), poker_game)
+
+    assert action == ActionType.RAISE
+    assert amount == 80
+
+def test_resolve_action_all_in(mock_db, poker_game):
+    gpt_player = GPTPlayer(mock_db)
+
     # Test raise above maximum (should become all-in)
-    json_string = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Possibly a medium pair",
-        "thought_process": "I have a strong starting hand, I should raise big",
-        "action": "raise",
-        "raise_amount": 2000  # More than player's stack
-    })
-    
-    action, amount = gpt_player._extract_action(json_string, poker_game)
-    
+    d = decision(FacingBetDecision, "raise", raise_amount=2000)  # More than player's stack
+
+    action, amount = gpt_player._resolve_action(d, poker_game)
+
     assert action == ActionType.ALL_IN
     assert amount == 1000  # Player's stack
-    mock_db.record_gpt_action.assert_called_once_with(action, 1000, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, 1000, d.model_dump_json())
 
-def test_extract_action_no_raise(mock_db, poker_game):
+def test_resolve_action_no_raise(mock_db, poker_game):
     gpt_player = GPTPlayer(mock_db)
-    mock_db.reset_mock()
-    
+
     # Test action without raise amount
-    json_string = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Possibly a strong hand",
-        "thought_process": "I shouldn't risk too much here",
-        "action": "call"
-    })
-    
-    action, amount = gpt_player._extract_action(json_string, poker_game)
-    
+    d = decision(FacingBetDecision, "call", raise_amount=None)
+
+    action, amount = gpt_player._resolve_action(d, poker_game)
+
     assert action == ActionType.CALL
     assert amount is None
-    mock_db.record_gpt_action.assert_called_once_with(action, None, json_string)
+    mock_db.record_gpt_action.assert_called_once_with(action, None, d.model_dump_json())
 
-def test_extract_action_invalid_json(mock_db, poker_game):
-    gpt_player = GPTPlayer(mock_db)
-    mock_db.reset_mock()
-    
-    # Test invalid JSON
-    json_string = "This is not valid JSON"
-    
-    action, amount = gpt_player._extract_action(json_string, poker_game)
-    
-    assert action == ActionType.FOLD
-    assert amount is None
-    mock_db.record_gpt_action.assert_not_called()
+def test_schema_actions_are_valid_action_types():
+    for schema in (FacingBetDecision, CanCheckDecision, FacingAllInDecision):
+        for action in typing.get_args(schema.model_fields["action"].annotation):
+            ActionType(action)
+
+def test_schemas_only_allow_legal_moves():
+    with pytest.raises(ValidationError):
+        decision(FacingAllInDecision, "raise")
+    with pytest.raises(ValidationError):
+        decision(CanCheckDecision, "fold", raise_amount=None)
+    with pytest.raises(ValidationError):
+        decision(FacingBetDecision, "check", raise_amount=None)
 
 @pytest.mark.asyncio
-async def test_pre_flop_small_blind(mock_chain, poker_game):
-    mock_chain.chain.ainvoke.return_value = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Unknown",
-        "thought_process": "Strong starting hand, should raise",
-        "action": "raise",
-        "raise_amount": 30
-    })
-    
-    action, amount = await mock_chain.pre_flop_small_blind(poker_game)
-    
+async def test_pre_flop_small_blind(mocked_player, poker_game):
+    chain = mocked_player.chains[FacingBetDecision]
+    chain.ainvoke.return_value = decision(FacingBetDecision, "raise", raise_amount=30)
+
+    action, amount = await mocked_player.pre_flop_small_blind(poker_game)
+
     assert action == ActionType.RAISE
     assert amount == 30
-    mock_chain.chain.ainvoke.assert_awaited_once()
+    chain.ainvoke.assert_awaited_once()
 
 @pytest.mark.asyncio
-async def test_pre_flop_big_blind(mock_chain, poker_game):
-    mock_chain.chain.ainvoke.return_value = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Unknown",
-        "thought_process": "Strong starting hand, should raise",
-        "action": "raise",
-        "raise_amount": 40
-    })
-    
-    action, amount = await mock_chain.pre_flop_big_blind(poker_game)
-    
+async def test_pre_flop_big_blind(mocked_player, poker_game):
+    chain = mocked_player.chains[CanCheckDecision]
+    chain.ainvoke.return_value = decision(CanCheckDecision, "raise", raise_amount=40)
+
+    action, amount = await mocked_player.pre_flop_big_blind(poker_game)
+
     assert action == ActionType.RAISE
     assert amount == 40
-    mock_chain.chain.ainvoke.assert_awaited_once()
+    chain.ainvoke.assert_awaited_once()
 
 @pytest.mark.asyncio
-async def test_first_to_act(mock_chain, poker_game):
+async def test_first_to_act(mocked_player, poker_game):
     # Set up board
     poker_game.board = [
         Card(Rank.TEN, Suit.SPADES),
@@ -161,23 +142,18 @@ async def test_first_to_act(mock_chain, poker_game):
         Card(Rank.QUEEN, Suit.DIAMONDS)
     ]
     poker_game.round = Round.FLOP
-    
-    mock_chain.chain.ainvoke.return_value = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Unknown",
-        "thought_process": "I have a straight draw, should bet",
-        "action": "raise",
-        "raise_amount": 50
-    })
-    
-    action, amount = await mock_chain.first_to_act(poker_game)
-    
+
+    chain = mocked_player.chains[CanCheckDecision]
+    chain.ainvoke.return_value = decision(CanCheckDecision, "raise", raise_amount=50)
+
+    action, amount = await mocked_player.first_to_act(poker_game)
+
     assert action == ActionType.RAISE
     assert amount == 50
-    mock_chain.chain.ainvoke.assert_awaited_once()
+    chain.ainvoke.assert_awaited_once()
 
 @pytest.mark.asyncio
-async def test_player_check(mock_chain, poker_game):
+async def test_player_check(mocked_player, poker_game):
     # Set up board
     poker_game.board = [
         Card(Rank.TEN, Suit.SPADES),
@@ -185,22 +161,18 @@ async def test_player_check(mock_chain, poker_game):
         Card(Rank.QUEEN, Suit.DIAMONDS)
     ]
     poker_game.round = Round.FLOP
-    
-    mock_chain.chain.ainvoke.return_value = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Unknown",
-        "thought_process": "I have a strong draw, should check",
-        "action": "check"
-    })
-    
-    action, amount = await mock_chain.player_check(poker_game)
-    
+
+    chain = mocked_player.chains[CanCheckDecision]
+    chain.ainvoke.return_value = decision(CanCheckDecision, "check", raise_amount=None)
+
+    action, amount = await mocked_player.player_check(poker_game)
+
     assert action == ActionType.CHECK
     assert amount is None
-    mock_chain.chain.ainvoke.assert_awaited_once()
+    chain.ainvoke.assert_awaited_once()
 
 @pytest.mark.asyncio
-async def test_player_raise(mock_chain, poker_game):
+async def test_player_raise(mocked_player, poker_game):
     # Set up board and raise
     poker_game.board = [
         Card(Rank.TEN, Suit.SPADES),
@@ -209,22 +181,18 @@ async def test_player_raise(mock_chain, poker_game):
     ]
     poker_game.round = Round.FLOP
     poker_game.current_bet = 30
-    
-    mock_chain.chain.ainvoke.return_value = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Possibly a pair",
-        "thought_process": "I have a straight, should call",
-        "action": "call"
-    })
-    
-    action, amount = await mock_chain.player_raise(poker_game)
-    
+
+    chain = mocked_player.chains[FacingBetDecision]
+    chain.ainvoke.return_value = decision(FacingBetDecision, "call", raise_amount=None)
+
+    action, amount = await mocked_player.player_raise(poker_game)
+
     assert action == ActionType.CALL
     assert amount is None
-    mock_chain.chain.ainvoke.assert_awaited_once()
+    chain.ainvoke.assert_awaited_once()
 
 @pytest.mark.asyncio
-async def test_player_all_in(mock_chain, poker_game):
+async def test_player_all_in(mocked_player, poker_game):
     # Set up board and all-in
     poker_game.board = [
         Card(Rank.TEN, Suit.SPADES),
@@ -234,24 +202,30 @@ async def test_player_all_in(mock_chain, poker_game):
     ]
     poker_game.round = Round.TURN
     poker_game.current_bet = 1000
-    
-    mock_chain.chain.ainvoke.return_value = json.dumps({
-        "your_hand": "Ace of Spades, King of Hearts",
-        "opponents_hand": "Possibly a flush draw",
-        "thought_process": "I have the nuts, should call",
-        "action": "call"
-    })
-    
-    action, amount = await mock_chain.player_all_in(poker_game)
-    
+
+    chain = mocked_player.chains[FacingAllInDecision]
+    chain.ainvoke.return_value = decision(FacingAllInDecision, "call")
+
+    action, amount = await mocked_player.player_all_in(poker_game)
+
     assert action == ActionType.CALL
     assert amount is None
-    mock_chain.chain.ainvoke.assert_awaited_once()
-@pytest.mark.asyncio
-async def test_api_error_falls_back_to_fold(mock_chain, poker_game):
-    mock_chain.chain.ainvoke.side_effect = Exception("invalid_prompt")
+    chain.ainvoke.assert_awaited_once()
 
-    action, amount = await mock_chain.player_raise(poker_game)
+@pytest.mark.asyncio
+async def test_api_error_falls_back_to_fold_when_facing_bet(mocked_player, poker_game):
+    mocked_player.chains[FacingBetDecision].ainvoke.side_effect = Exception("invalid_prompt")
+
+    action, amount = await mocked_player.player_raise(poker_game)
 
     assert action == ActionType.FOLD
+    assert amount is None
+
+@pytest.mark.asyncio
+async def test_api_error_falls_back_to_check_when_free(mocked_player, poker_game):
+    mocked_player.chains[CanCheckDecision].ainvoke.side_effect = Exception("invalid_prompt")
+
+    action, amount = await mocked_player.player_check(poker_game)
+
+    assert action == ActionType.CHECK
     assert amount is None

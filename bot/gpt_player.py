@@ -1,74 +1,87 @@
-import json
+from typing import ClassVar, Literal, Optional, cast
+from pydantic import BaseModel, Field
+from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from game.poker import PokerGameManager
 from db.db_utils import DatabaseManager
 from db.enums import ActionType
 from config.log_config import logger
 
+
+# Structured output schemas: the API guarantees replies match these, so each spot only offers its legal moves.
+# Field order matters: the model reasons before labelling its hand or choosing an action
+# (with your_hand first it often misreads made hands, e.g. folding a straight as "queen-high").
+class Decision(BaseModel):
+    # Legal move to make when no decision comes back (API error or refusal)
+    fallback: ClassVar[ActionType]
+
+    thought_process: str = Field(description="Your thought process: first work out exactly what hand you have made with the board, then decide")
+    your_hand: str = Field(description="The current hand you are playing")
+    opponents_hand: str = Field(description="What you think your opponent has based on how they have played")
+    action: str
+
+
+class RaisableDecision(Decision):
+    raise_amount: Optional[int] = Field(description="Total chips to raise to; null unless the action is raise")
+
+
+class FacingBetDecision(RaisableDecision):
+    fallback = ActionType.FOLD
+    action: Literal["call", "raise", "all-in", "fold"]
+
+
+class CanCheckDecision(RaisableDecision):
+    fallback = ActionType.CHECK
+    action: Literal["check", "raise", "all-in"]
+
+
+class FacingAllInDecision(Decision):
+    fallback = ActionType.FOLD
+    action: Literal["call", "fold"]
+
+
 class GPTPlayer:
     def __init__(self, db: DatabaseManager, model_name="gpt-6-luna"):
         self.db = db
         llm = ChatOpenAI(model_name=model_name, reasoning_effort="none")
-        output_parser = StrOutputParser()
         template = '''
-        Imagine you're a poker bot in a heads-up Texas Hold'em game. Your play is optimal, 
-        mixing strategic bluffs and strong hands. You raise on strength, going All-in only with the best hands. 
-        Folding against a superior opponent hand, you call and check when fitting. Remember, only "call" the ALL-IN if your hand is better. 
-        Please reply in the following JSON format: {{your_hand": "what is the current hand you are playing",  
-        "opponents_hand": "what do you think your opponent has based on how he has played", "thought_process": "what is your thought process", 
-        "action": "your action", "raise_amount": your raise amount if applicable}}
-        Note: If the action you chose doesn't involve a raise, please do not include the "raise_amount" key in your JSON response.
+        Imagine you're a poker bot in a heads-up Texas Hold'em game. Your play is optimal,
+        mixing strategic bluffs and strong hands. You raise on strength, going All-in only with the best hands.
+        Folding against a superior opponent hand, you call and check when fitting. Remember, only "call" the ALL-IN if your hand is better.
         '''
-        
+
         prompt = ChatPromptTemplate.from_messages([
             ("system", template),
             ("user", "{input}")
         ])
 
-        self.chain = prompt | llm | output_parser
-        
-    async def _ask(self, formatted_text: str) -> str:
-        # Returns "" on API errors so _extract_action falls back to the default move
-        try:
-            return await self.chain.ainvoke({'input': formatted_text})
-        except Exception as e:
-            logger.error(f"GPT request failed: {e}")
-            return ""
+        self.chains: dict[type[Decision], Runnable] = {
+            schema: prompt | llm.with_structured_output(schema, method="json_schema", strict=True)
+            for schema in (FacingBetDecision, CanCheckDecision, FacingAllInDecision)
+        }
 
-    def _extract_action(self, json_string, pokerGame: PokerGameManager):
+    async def _decide(self, formatted_text: str, schema: type[Decision], pokerGame: PokerGameManager):
+        try:
+            decision = cast(Decision, await self.chains[schema].ainvoke({'input': formatted_text}))
+        except Exception as e:
+            logger.error(f"GPT request failed, defaulting to {schema.fallback.value}: {e}")
+            return (schema.fallback, None)
+        return self._resolve_action(decision, pokerGame)
+
+    def _resolve_action(self, decision: Decision, pokerGame: PokerGameManager):
         min_raise, max_raise = pokerGame.return_min_max_raise(1)
-        try:
-            json_data = json.loads(json_string)
-            action_str = json_data['action'].lower()
-            action = ActionType(action_str)
-                        
-            raise_amount = None
-            if action == ActionType.RAISE:
-                raise_amount = int(json_data['raise_amount'])
-                
-                if raise_amount < min_raise:
-                    raise_amount = min_raise
+        action = ActionType(decision.action)
 
-                elif raise_amount >= max_raise:
-                    action = ActionType.ALL_IN
-                    raise_amount = pokerGame.return_player_stack(1)
-            
-            self.db.record_gpt_action(action, raise_amount, json_string)
-            return (action, raise_amount)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse GPT response as JSON: {e}")
-            return (ActionType.FOLD, None)
-        except KeyError as e:
-            logger.warning(f"Missing key in GPT response: {e}")
-            return (ActionType.FOLD, None)
-        except ValueError as e:
-            logger.warning(f"Invalid value in GPT response: {e}")
-            return (ActionType.FOLD, None)
-        except Exception as e:
-            logger.error(f"Unexpected error in GPT action extraction: {e}")
-            return (ActionType.FOLD, None)
+        raise_amount = None
+        if action == ActionType.RAISE and isinstance(decision, RaisableDecision):
+            raise_amount = max(decision.raise_amount or 0, min_raise)
+            if raise_amount >= max_raise:
+                action = ActionType.ALL_IN
+                raise_amount = pokerGame.return_player_stack(1)
+
+        self.db.record_gpt_action(action, raise_amount, decision.model_dump_json())
+        return (action, raise_amount)
 
 
     async def pre_flop_small_blind(self, pokerGame: PokerGameManager):
@@ -93,8 +106,7 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = await self._ask(formatted_text)
-        return self._extract_action(response, pokerGame)
+        return await self._decide(formatted_text, FacingBetDecision, pokerGame)
 
     async def pre_flop_big_blind(self, pokerGame: PokerGameManager):
         # return Check, Raise, or All-in
@@ -116,8 +128,7 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = await self._ask(formatted_text)
-        return self._extract_action(response, pokerGame)
+        return await self._decide(formatted_text, CanCheckDecision, pokerGame)
     
     async def first_to_act(self, pokerGame: PokerGameManager):
         # return Check, Raise, or All-in
@@ -141,8 +152,7 @@ class GPTPlayer:
         '''
 
         formatted_text = human_template.format(**inputs)
-        response = await self._ask(formatted_text)
-        return self._extract_action(response, pokerGame)
+        return await self._decide(formatted_text, CanCheckDecision, pokerGame)
     
     async def player_check(self, pokerGame: PokerGameManager):
         # return Check, Raise, or All-in
@@ -167,8 +177,7 @@ class GPTPlayer:
         
         formatted_text = human_template.format(**inputs)
 
-        response = await self._ask(formatted_text)
-        return self._extract_action(response, pokerGame)
+        return await self._decide(formatted_text, CanCheckDecision, pokerGame)
     
     async def player_raise(self, pokerGame: PokerGameManager):
         # return Call, Raise, All-in, or Fold
@@ -197,8 +206,7 @@ class GPTPlayer:
 
         formatted_text = human_template.format(**inputs)
 
-        response = await self._ask(formatted_text)
-        return self._extract_action(response, pokerGame)  
+        return await self._decide(formatted_text, FacingBetDecision, pokerGame)
 
     async def player_all_in(self, pokerGame: PokerGameManager):
         # return Call, or Fold
@@ -229,5 +237,4 @@ class GPTPlayer:
 
         formatted_text = human_template.format(**inputs)
         
-        response = await self._ask(formatted_text)
-        return self._extract_action(response, pokerGame)
+        return await self._decide(formatted_text, FacingAllInDecision, pokerGame)

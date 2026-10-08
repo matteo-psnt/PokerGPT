@@ -4,6 +4,7 @@ SQLAlchemy
 mysql-connector-python
 langchain
 langchain-openai
+pydantic>=2
 openai
 pytest
 pytest-asyncio
