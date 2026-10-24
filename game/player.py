@@ -22,7 +22,7 @@ class Player:
 
     @property
     def hand(self) -> list[Card]:
-        return [self.card1, self.card2]
+        return [card for card in (self.card1, self.card2) if card is not None]
 
     # chips the player can still put into this betting round, counting what they've already bet
     @property

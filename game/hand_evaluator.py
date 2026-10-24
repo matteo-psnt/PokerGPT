@@ -57,7 +57,7 @@ def _straight(cards: list[Card]) -> list[Card] | None:
     for card in cards:
         by_rank.setdefault(card.rank, card)
     for high in range(Rank.ACE, Rank.FIVE - 1, -1):
-        run = [by_rank.get(Rank.ACE if rank == 1 else Rank(rank)) for rank in range(high, high - 5, -1)]
-        if all(run):
-            return run
+        ranks = [Rank.ACE if rank == 1 else Rank(rank) for rank in range(high, high - 5, -1)]
+        if all(rank in by_rank for rank in ranks):
+            return [by_rank[rank] for rank in ranks]
     return None

@@ -154,7 +154,7 @@ class DiscordPokerManager:
         else:
             await self.next_street()
 
-    async def gpt_acts(self, action: ActionType, raise_amount: int | None, call_message: str | None = None):
+    async def gpt_acts(self, action: ActionType, raise_amount: int | None, call_message: str = "PokerGPT __Calls.__"):
         if action == ActionType.CHECK:
             self.log("PokerGPT Checks.")
             await self.send("PokerGPT __Checks.__")
@@ -177,6 +177,7 @@ class DiscordPokerManager:
         self.game.player_raise(GPT, amount)
         await self.send(f"**Main pot:** {self.game.current_pot} chips")
 
+        view: PokerView
         if self.user.total_chips <= self.game.current_bet:
             await self.send(f"PokerGPT puts you __All-In for {self.user.total_chips} chips.__")
             view = AllInCallView(self)
