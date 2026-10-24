@@ -201,22 +201,9 @@ class Dealer:
             if all_cards[i].rank == all_cards[i + 1].rank:
                 hand_rank = handRank.PAIR
                 hand_played = all_cards[i : i + 2]
-                if (all_cards[0] != all_cards[i] and all_cards[1] != all_cards[i] and all_cards[2] != all_cards[i]):
-                    hand_played.append(all_cards[0])
-                    hand_played.append(all_cards[1])
-                    hand_played.append(all_cards[2])
-                elif (all_cards[2] != all_cards[i] and all_cards[3] != all_cards[i] and all_cards[4] != all_cards[i]):
-                    hand_played.append(all_cards[2])
-                    hand_played.append(all_cards[3])
-                    hand_played.append(all_cards[4])
-                elif (all_cards[0] != all_cards[i] and all_cards[3] != all_cards[i] and all_cards[4] != all_cards[i]):
-                    hand_played.append(all_cards[0])
-                    hand_played.append(all_cards[3])
-                    hand_played.append(all_cards[4])
-                else:
-                    hand_played.append(all_cards[0])
-                    hand_played.append(all_cards[1])
-                    hand_played.append(all_cards[4])
+                # Kickers are the three highest cards not of the pair's rank
+                # (compare ranks, since Card equality also compares suits)
+                hand_played.extend([card for card in all_cards if card.rank != all_cards[i].rank][:3])
                 return hand_rank, hand_played
         
         # Return highest card

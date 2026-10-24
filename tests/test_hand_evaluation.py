@@ -226,3 +226,44 @@ def test_high_card():
     assert hand[2].rank == Rank.QUEEN
     assert hand[3].rank == Rank.JACK
     assert hand[4].rank == Rank.NINE
+def test_pair_kickers_when_pair_is_second_highest():
+    dealer = Dealer(1)
+    player = dealer.players[0]
+
+    # Board pair of kings below an ace: kickers must be A-J-9, not the second king
+    player.card1 = Card(Rank.SIX, Suit.SPADES)
+    player.card2 = Card(Rank.FOUR, Suit.SPADES)
+    dealer.board = [
+        Card(Rank.JACK, Suit.DIAMONDS),
+        Card(Rank.ACE, Suit.DIAMONDS),
+        Card(Rank.KING, Suit.SPADES),
+        Card(Rank.KING, Suit.DIAMONDS),
+        Card(Rank.NINE, Suit.HEARTS)
+    ]
+
+    rank, hand = dealer.get_hand_rank(player)
+
+    assert rank == handRank.PAIR
+    assert [card.rank for card in hand] == [Rank.KING, Rank.KING, Rank.ACE, Rank.JACK, Rank.NINE]
+
+def test_pair_kicker_decides_winner():
+    dealer = Dealer(2)
+    p1, p2 = dealer.players
+
+    # Pair of nines on board with two overcards in hand: K kicker beats Q kicker
+    p1.card1 = Card(Rank.ACE, Suit.HEARTS)
+    p1.card2 = Card(Rank.QUEEN, Suit.HEARTS)
+    p2.card1 = Card(Rank.ACE, Suit.CLUBS)
+    p2.card2 = Card(Rank.KING, Suit.CLUBS)
+    dealer.board = [
+        Card(Rank.NINE, Suit.SPADES),
+        Card(Rank.NINE, Suit.DIAMONDS),
+        Card(Rank.SEVEN, Suit.CLUBS),
+        Card(Rank.FOUR, Suit.HEARTS),
+        Card(Rank.TWO, Suit.DIAMONDS)
+    ]
+
+    dealer.evaluate_hands()
+
+    assert [card.rank for card in p1.hand_played] == [Rank.NINE, Rank.NINE, Rank.ACE, Rank.QUEEN, Rank.SEVEN]
+    assert dealer.determine_winner() == p2
