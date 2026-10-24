@@ -137,3 +137,8 @@ def test_player_win_split_list():
     game.player_win([p0, p1])      # split
     assert p0.stack == stack0 + 50
     assert p1.stack == stack1 + 50
+def test_min_raise_is_at_least_big_blind_with_no_bet():
+    game = PokerGameManager()
+    game.reset_betting()
+    min_raise, _ = game.return_min_max_raise(1)
+    assert min_raise == game.big_blind

@@ -237,7 +237,8 @@ class Dealer:
             if player.hand_rank == winner.hand_rank:
                 tie = True
                 for i in range(len(player.hand_played)):
-                    if player.hand_played[i] != winner.hand_played[i]:
+                    # Compare ranks only: Card equality also checks suit, and suits never break ties
+                    if player.hand_played[i].rank != winner.hand_played[i].rank:
                         tie = False
                         break
                 if tie:
@@ -259,7 +260,8 @@ class PokerGameManager(Dealer):
         self.current_bet = 0
     
     def return_min_max_raise(self, player: int):
-        min_raise = self.current_bet * 2
+        # Same rules the user's raise modal enforces: at least double the bet and at least the big blind
+        min_raise = max(self.current_bet * 2, self.big_blind)
         max_raise = self.players[1].stack + self.players[1].round_pot_commitment
         return (min_raise, max_raise)
 

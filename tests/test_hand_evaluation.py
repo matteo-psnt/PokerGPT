@@ -267,3 +267,26 @@ def test_pair_kicker_decides_winner():
 
     assert [card.rank for card in p1.hand_played] == [Rank.NINE, Rank.NINE, Rank.ACE, Rank.QUEEN, Rank.SEVEN]
     assert dealer.determine_winner() == p2
+
+def test_same_ranks_different_suits_split_pot():
+    dealer = Dealer(2)
+    p1, p2 = dealer.players
+
+    # Both players play A-K-Q-J-9 high, only the suits of their hole cards differ
+    p1.card1 = Card(Rank.ACE, Suit.SPADES)
+    p1.card2 = Card(Rank.KING, Suit.DIAMONDS)
+    p2.card1 = Card(Rank.ACE, Suit.HEARTS)
+    p2.card2 = Card(Rank.KING, Suit.CLUBS)
+    dealer.board = [
+        Card(Rank.QUEEN, Suit.SPADES),
+        Card(Rank.JACK, Suit.HEARTS),
+        Card(Rank.NINE, Suit.DIAMONDS),
+        Card(Rank.SEVEN, Suit.CLUBS),
+        Card(Rank.TWO, Suit.HEARTS)
+    ]
+
+    dealer.evaluate_hands()
+    winners = dealer.determine_winner()
+
+    assert isinstance(winners, list)
+    assert p1 in winners and p2 in winners
