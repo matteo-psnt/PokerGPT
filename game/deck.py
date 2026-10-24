@@ -1,5 +1,6 @@
-from game.card import *
 import random
+from game.card import Card, Rank, Suit
+
 
 class Deck:
     def __init__(self):
@@ -9,5 +10,5 @@ class Deck:
     def shuffle(self):
         random.shuffle(self.cards)
 
-    def deal_card(self):
+    def deal_card(self) -> Card:
         return self.cards.pop()

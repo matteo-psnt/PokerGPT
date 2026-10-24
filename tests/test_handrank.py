@@ -1,30 +1,30 @@
-from game.player import handRank
+from game.player import HandRank
 
 def test_hand_rank_ordering():
     # Test ordering of hand ranks
-    assert handRank.HIGH_CARD < handRank.PAIR
-    assert handRank.PAIR < handRank.TWO_PAIR
-    assert handRank.TWO_PAIR < handRank.THREE_OF_A_KIND
-    assert handRank.THREE_OF_A_KIND < handRank.STRAIGHT
-    assert handRank.STRAIGHT < handRank.FLUSH
-    assert handRank.FLUSH < handRank.FULL_HOUSE
-    assert handRank.FULL_HOUSE < handRank.FOUR_OF_A_KIND
-    assert handRank.FOUR_OF_A_KIND < handRank.STRAIGHT_FLUSH
-    assert handRank.STRAIGHT_FLUSH < handRank.ROYAL_FLUSH
+    assert HandRank.HIGH_CARD < HandRank.PAIR
+    assert HandRank.PAIR < HandRank.TWO_PAIR
+    assert HandRank.TWO_PAIR < HandRank.THREE_OF_A_KIND
+    assert HandRank.THREE_OF_A_KIND < HandRank.STRAIGHT
+    assert HandRank.STRAIGHT < HandRank.FLUSH
+    assert HandRank.FLUSH < HandRank.FULL_HOUSE
+    assert HandRank.FULL_HOUSE < HandRank.FOUR_OF_A_KIND
+    assert HandRank.FOUR_OF_A_KIND < HandRank.STRAIGHT_FLUSH
+    assert HandRank.STRAIGHT_FLUSH < HandRank.ROYAL_FLUSH
 
 def test_hand_rank_equality():
     # Test equality comparison
-    assert handRank.PAIR == handRank.PAIR
-    assert handRank.STRAIGHT == handRank.STRAIGHT
-    assert handRank.ROYAL_FLUSH == handRank.ROYAL_FLUSH
+    assert HandRank.PAIR == HandRank.PAIR
+    assert HandRank.STRAIGHT == HandRank.STRAIGHT
+    assert HandRank.ROYAL_FLUSH == HandRank.ROYAL_FLUSH
     
     # Test inequality
-    assert handRank.PAIR != handRank.STRAIGHT
-    assert handRank.FLUSH != handRank.FULL_HOUSE
+    assert HandRank.PAIR != HandRank.STRAIGHT
+    assert HandRank.FLUSH != HandRank.FULL_HOUSE
 
 def test_hand_rank_string_representation():
     # Test string representation
-    assert str(handRank.HIGH_CARD) == "High Card"
-    assert str(handRank.TWO_PAIR) == "Two Pair"
-    assert str(handRank.STRAIGHT_FLUSH) == "Straight Flush"
-    assert str(handRank.ROYAL_FLUSH) == "Royal Flush"
+    assert str(HandRank.HIGH_CARD) == "High Card"
+    assert str(HandRank.TWO_PAIR) == "Two Pair"
+    assert str(HandRank.STRAIGHT_FLUSH) == "Straight Flush"
+    assert str(HandRank.ROYAL_FLUSH) == "Royal Flush"

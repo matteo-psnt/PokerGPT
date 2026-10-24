@@ -1,42 +1,41 @@
-from typing import Any
-from game.deck import *
+from enum import IntEnum
+from game.card import Card
+from game.deck import Deck
 
 
-class handRank(Enum):
+class HandRank(IntEnum):
     HIGH_CARD, PAIR, TWO_PAIR, THREE_OF_A_KIND, STRAIGHT, FLUSH, FULL_HOUSE, FOUR_OF_A_KIND, STRAIGHT_FLUSH, ROYAL_FLUSH = range(10)
 
     def __str__(self) -> str:
         return self.name.replace("_", " ").title()
-    
-    def __lt__(self, other):
-        return self.value < other.value
-    
-    def __gt__(self, other):
-        return self.value > other.value
-    
-    def __eq__(self, other):
-        return self.value == other.value
 
 
 class Player:
-    def __init__(self, player_name: str, buy_in: int):
-        self.player_name = player_name
+    def __init__(self, name: str, buy_in: int):
+        self.name = name
         self.stack = buy_in
         self.round_pot_commitment = 0
-        self.card1 = None
-        self.card2 = None
-        self.hand_rank = handRank.HIGH_CARD
-        self.hand_played = []
+        self.card1: Card | None = None
+        self.card2: Card | None = None
+        self.hand_rank = HandRank.HIGH_CARD
+        self.hand_played: list[Card] = []
 
-    def print_hand(self):
-        print(f"{self.card1}, {self.card2}")
-    
-    def return_hand(self):
+    @property
+    def hand(self) -> list[Card]:
         return [self.card1, self.card2]
-    
-    def return_long_hand(self):
+
+    # chips the player can still put into this betting round, counting what they've already bet
+    @property
+    def total_chips(self) -> int:
+        return self.stack + self.round_pot_commitment
+
+    def hand_str(self) -> str:
+        return ", ".join(map(str, self.hand))
+
+    def hand_long_str(self) -> str | None:
         if self.card1 is not None and self.card2 is not None:
             return f"{self.card1.long_str()}, {self.card2.long_str()}"
+        return None
 
     def deal_hand(self, deck: Deck):
         self.card1 = deck.deal_card()
@@ -50,5 +49,5 @@ class Player:
         self.card1 = None
         self.card2 = None
         self.round_pot_commitment = 0
-        self.hand_rank = handRank.HIGH_CARD
+        self.hand_rank = HandRank.HIGH_CARD
         self.hand_played = []

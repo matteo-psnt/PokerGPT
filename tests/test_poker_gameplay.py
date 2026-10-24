@@ -1,5 +1,5 @@
 from game.poker import PokerGameManager
-from game.player import handRank
+from game.player import HandRank
 from game.card import Card, Rank, Suit
 from db.enums import Round
 
@@ -98,7 +98,7 @@ def test_player_raise():
     assert game.players[0].stack == 60  # 100 - (60 - 20)
     assert game.current_pot == 40  # The raise amount
 
-def test_player_win():
+def test_award_pot():
     game = PokerGameManager()
     
     # Set up pot and player stacks
@@ -107,18 +107,18 @@ def test_player_win():
     game.players[1].stack = 1000
     
     # Player 0 wins
-    game.player_win(0)
+    game.award_pot(game.players[0])
     
     # Check that pot was awarded correctly
     assert game.players[0].stack == 1000  # 900 + 100
     assert game.players[1].stack == 1000  # Unchanged
 
-def test_determine_winner():
+def test_determine_winners():
     game = PokerGameManager()
     
     # Set up player hands
-    game.players[0].hand_rank = handRank.FLUSH
-    game.players[1].hand_rank = handRank.STRAIGHT
+    game.players[0].hand_rank = HandRank.FLUSH
+    game.players[1].hand_rank = HandRank.STRAIGHT
     
     # Set hand_played for tiebreaking
     game.players[0].hand_played = [
@@ -138,20 +138,13 @@ def test_determine_winner():
     ]
     
     # Determine winner
-    winner = game.determine_winner()
-    
     # Player 0 should win with a flush
-    assert winner == game.players[0]
+    assert game.determine_winners() == [game.players[0]]
     
     # Test tie
-    game.players[1].hand_rank = handRank.FLUSH
+    game.players[1].hand_rank = HandRank.FLUSH
     game.players[1].hand_played = game.players[0].hand_played.copy()
     
     # Determine winner again
-    winners = game.determine_winner()
-    
     # Both players should tie
-    assert isinstance(winners, list)
-    assert len(winners) == 2
-    assert game.players[0] in winners
-    assert game.players[1] in winners
+    assert game.determine_winners() == game.players

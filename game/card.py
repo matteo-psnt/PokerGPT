@@ -1,63 +1,48 @@
-from enum import Enum
+from dataclasses import dataclass
+from enum import Enum, IntEnum
 
-class Rank(Enum):
-    ACE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, TEN, JACK, QUEEN, KING = range(13)
+
+class Rank(IntEnum):
+    TWO = 2
+    THREE = 3
+    FOUR = 4
+    FIVE = 5
+    SIX = 6
+    SEVEN = 7
+    EIGHT = 8
+    NINE = 9
+    TEN = 10
+    JACK = 11
+    QUEEN = 12
+    KING = 13
+    ACE = 14
+
+    @property
+    def symbol(self) -> str:
+        return self.name[0] if self > Rank.TEN else str(self.value)
+
+    @property
+    def long_name(self) -> str:
+        return self.name.title() if self > Rank.TEN else str(self.value)
+
 
 class Suit(Enum):
-    SPADES, HEARTS, DIAMONDS, CLUBS = range(4)
+    SPADES = "S"
+    HEARTS = "H"
+    DIAMONDS = "D"
+    CLUBS = "C"
 
+
+@dataclass(frozen=True)
 class Card:
-    def __init__(self, rank: Rank, suit: Suit):
-        self.rank = rank
-        self.suit = suit
-
-    def __eq__(self, other):
-        if isinstance(other, Card):
-            return self.rank == other.rank and self.suit == other.suit
-        elif isinstance(other, Rank):
-            return self.rank == other
-        elif isinstance(other, int):
-            return self.rank.value == other
-        raise TypeError(f"Cannot compare Card with {type(other)}")
-
-    def __lt__(self, other):
-        if self.rank == Rank.ACE and other.rank != Rank.ACE:
-            return False
-        elif self.rank != Rank.ACE and other.rank == Rank.ACE:
-            return True
-        return self.rank.value < other.rank.value
-    
-    def __gt__(self, other):
-        if self.rank == Rank.ACE and other.rank != Rank.ACE:
-            return True
-        elif self.rank != Rank.ACE and other.rank == Rank.ACE:
-            return False
-        return self.rank.value > other.rank.value
-    
-    # A bit dubious to use this method, but it works
-    def __add__(self, other):
-        if isinstance(other, Card):
-            new_rank = self.rank.value + other.rank.value
-        elif isinstance(other, Rank):
-            new_rank = self.rank.value + other.value
-        elif isinstance(other, int):
-            new_rank = self.rank.value + other
-        else:
-            raise TypeError(f"Cannot add Card with {type(other)}")
-        
-        if new_rank > 12:
-            new_rank -= 13
-        return Rank(new_rank)
+    rank: Rank
+    suit: Suit
 
     def __str__(self):
-        suits = ["S", "H", "D", "C"]
-        ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
-        return f"{ranks[self.rank.value]}{suits[self.suit.value]}"
-    
-    def long_str(self):
-        suits = ["Spades", "Hearts", "Diamonds", "Clubs"]
-        ranks = ["Ace", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King"]
-        return f"{ranks[self.rank.value]} of {suits[self.suit.value]}"
+        return f"{self.rank.symbol}{self.suit.value}"
 
     def __repr__(self):
-        return self.__str__()
+        return str(self)
+
+    def long_str(self):
+        return f"{self.rank.long_name} of {self.suit.name.title()}"

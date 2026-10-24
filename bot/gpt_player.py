@@ -70,7 +70,7 @@ class GPTPlayer:
         return self._resolve_action(decision, pokerGame)
 
     def _resolve_action(self, decision: Decision, pokerGame: PokerGameManager):
-        min_raise, max_raise = pokerGame.return_min_max_raise(1)
+        min_raise, max_raise = pokerGame.raise_limits(1)
         action = ActionType(decision.action)
 
         raise_amount = None
@@ -78,7 +78,7 @@ class GPTPlayer:
             raise_amount = max(decision.raise_amount or 0, min_raise)
             if raise_amount >= max_raise:
                 action = ActionType.ALL_IN
-                raise_amount = pokerGame.return_player_stack(1)
+                raise_amount = pokerGame.players[1].stack
 
         self.db.record_gpt_action(action, raise_amount, decision.model_dump_json())
         return (action, raise_amount)
@@ -89,9 +89,9 @@ class GPTPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.return_player_stack(1),
-            'opponents_stack': pokerGame.return_player_stack(0),
-            'hand': pokerGame.players[1].return_long_hand(),
+            'stack': pokerGame.players[1].stack,
+            'opponents_stack': pokerGame.players[0].stack,
+            'hand': pokerGame.players[1].hand_long_str(),
             'pot': pokerGame.current_pot,
             'amount_to_call': pokerGame.big_blind - pokerGame.small_blind
         }
@@ -113,9 +113,9 @@ class GPTPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.return_player_stack(1),
-            'opponents_stack': pokerGame.return_player_stack(0),
-            'hand': pokerGame.players[1].return_long_hand(),
+            'stack': pokerGame.players[1].stack,
+            'opponents_stack': pokerGame.players[0].stack,
+            'hand': pokerGame.players[1].hand_long_str(),
             'pot': pokerGame.current_pot
         }
 
@@ -135,12 +135,12 @@ class GPTPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.return_player_stack(1),
-            'opponents_stack': pokerGame.return_player_stack(0),
-            'hand': pokerGame.players[1].return_long_hand(),
+            'stack': pokerGame.players[1].stack,
+            'opponents_stack': pokerGame.players[0].stack,
+            'hand': pokerGame.players[1].hand_long_str(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
-            'community_cards': pokerGame.return_community_cards()
+            'community_cards': pokerGame.board_str()
         }
 
         human_template = '''
@@ -159,12 +159,12 @@ class GPTPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.return_player_stack(1),
-            'opponents_stack': pokerGame.return_player_stack(0),
-            'hand': pokerGame.players[1].return_long_hand(),
+            'stack': pokerGame.players[1].stack,
+            'opponents_stack': pokerGame.players[0].stack,
+            'hand': pokerGame.players[1].hand_long_str(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
-            'community_cards': pokerGame.return_community_cards()
+            'community_cards': pokerGame.board_str()
         }
 
         human_template = """
@@ -184,12 +184,12 @@ class GPTPlayer:
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.return_player_stack(1),
-            'opponents_stack': pokerGame.return_player_stack(0),
-            'hand': pokerGame.players[1].return_long_hand(),
+            'stack': pokerGame.players[1].stack,
+            'opponents_stack': pokerGame.players[0].stack,
+            'hand': pokerGame.players[1].hand_long_str(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
-            'community_cards': pokerGame.return_community_cards(),
+            'community_cards': pokerGame.board_str(),
             'opponent_raise': pokerGame.current_bet,
             'amount_to_call': pokerGame.current_bet - pokerGame.players[1].round_pot_commitment
         }
@@ -211,16 +211,16 @@ class GPTPlayer:
     async def player_all_in(self, pokerGame: PokerGameManager):
         # return Call, or Fold
         amount_to_call = pokerGame.current_bet - pokerGame.players[1].round_pot_commitment
-        if amount_to_call > pokerGame.return_player_stack(1):
-            amount_to_call = pokerGame.return_player_stack(1)
+        if amount_to_call > pokerGame.players[1].stack:
+            amount_to_call = pokerGame.players[1].stack
         inputs = {
             'small_blind': pokerGame.small_blind,
             'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.return_player_stack(1),
-            'hand': pokerGame.players[1].return_long_hand(),
+            'stack': pokerGame.players[1].stack,
+            'hand': pokerGame.players[1].hand_long_str(),
             'pot': pokerGame.current_pot,
             'round': pokerGame.round,
-            'community_cards': pokerGame.return_community_cards(),
+            'community_cards': pokerGame.board_str(),
             'opponent_raise': pokerGame.current_bet,
             'amount_to_call': amount_to_call
         }

@@ -1,15 +1,15 @@
-from game.player import Player, handRank
+from game.player import Player, HandRank
 from game.deck import Deck
 from game.card import Card, Rank, Suit
 
 def test_player_creation():
     player = Player("Test Player", 1000)
-    assert player.player_name == "Test Player"
+    assert player.name == "Test Player"
     assert player.stack == 1000
     assert player.round_pot_commitment == 0
     assert player.card1 is None
     assert player.card2 is None
-    assert player.hand_rank == handRank.HIGH_CARD
+    assert player.hand_rank == HandRank.HIGH_CARD
     assert player.hand_played == []
 
 def test_deal_hand():
@@ -25,29 +25,29 @@ def test_deal_hand():
     assert player.card1 != player.card2
     assert len(deck.cards) == 50  # 52 - 2 cards dealt
 
-def test_return_hand():
+def test_hand():
     player = Player("Test Player", 1000)
     player.card1 = Card(Rank.ACE, Suit.SPADES)
     player.card2 = Card(Rank.KING, Suit.HEARTS)
     
-    hand = player.return_hand()
+    hand = player.hand
     
     assert len(hand) == 2
     assert hand[0] == player.card1
     assert hand[1] == player.card2
 
-def test_return_long_hand():
+def test_hand_long_str():
     player = Player("Test Player", 1000)
     player.card1 = Card(Rank.ACE, Suit.SPADES)
     player.card2 = Card(Rank.KING, Suit.HEARTS)
     
-    long_hand = player.return_long_hand()
+    long_hand = player.hand_long_str()
     
     assert long_hand == "Ace of Spades, King of Hearts"
     
     # Test with no cards
     player2 = Player("No Cards", 1000)
-    assert player2.return_long_hand() is None
+    assert player2.hand_long_str() is None
 
 def test_bet():
     player = Player("Test Player", 1000)
@@ -67,7 +67,7 @@ def test_reset():
     player.card1 = Card(Rank.ACE, Suit.SPADES)
     player.card2 = Card(Rank.KING, Suit.HEARTS)
     player.round_pot_commitment = 100
-    player.hand_rank = handRank.PAIR
+    player.hand_rank = HandRank.PAIR
     player.hand_played = [player.card1, player.card2]
     
     player.reset()
@@ -75,7 +75,7 @@ def test_reset():
     assert player.card1 is None
     assert player.card2 is None
     assert player.round_pot_commitment == 0
-    assert player.hand_rank == handRank.HIGH_CARD
+    assert player.hand_rank == HandRank.HIGH_CARD
     assert player.hand_played == []
     # Stack should remain unchanged
     assert player.stack == 1000

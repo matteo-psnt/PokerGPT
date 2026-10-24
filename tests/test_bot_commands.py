@@ -166,7 +166,7 @@ async def test_player_wins_game(discord_poker_manager, mock_ctx, poker_game, moc
         await discord_poker_manager.showdown()
         
         # Verify game was ended
-        mock_db_manager.end_game.assert_called_once_with(poker_game.return_player_stack(0))
+        mock_db_manager.end_game.assert_called_once_with(poker_game.players[0].stack)
         
         # Check that victory message was sent
         victory_message_sent = False
@@ -208,7 +208,7 @@ async def test_preflop_gpt_cant_cover_small_blind_button0(mock_ctx, poker_game, 
     mock_ctx.send.assert_any_call(
         "PokerGPT can't cover small blind and is __All-in for 3 chips.__"
     )
-    mock_ctx.send.assert_any_call(f"{poker_game.players[0].player_name} calls.")
+    mock_ctx.send.assert_any_call(f"{poker_game.players[0].name} calls.")
     m.showdown.assert_awaited_once()
 
 @pytest.mark.asyncio
@@ -226,7 +226,7 @@ async def test_preflop_player_cant_cover_small_blind_button0(mock_ctx, poker_gam
     assert poker_game.players[0].round_pot_commitment == 4
     assert poker_game.players[1].round_pot_commitment == 4
     mock_ctx.send.assert_any_call(
-        f"{poker_game.players[0].player_name} can't cover small blind and is __All-in for 4 chips.__"
+        f"{poker_game.players[0].name} can't cover small blind and is __All-in for 4 chips.__"
     )
     mock_ctx.send.assert_any_call("PokerGPT calls.")
     m.showdown.assert_awaited_once()
@@ -306,7 +306,7 @@ async def test_preflop_player_cant_cover_small_blind_button1(mock_ctx, poker_gam
     assert poker_game.players[0].round_pot_commitment == 3
     assert poker_game.players[1].round_pot_commitment == 3
     mock_ctx.send.assert_any_call(
-        f"{poker_game.players[0].player_name} can't cover small blind and is __All-in for 3 chips.__"
+        f"{poker_game.players[0].name} can't cover small blind and is __All-in for 3 chips.__"
     )
     mock_ctx.send.assert_any_call("PokerGPT calls.")
     m.showdown.assert_awaited_once()
@@ -328,7 +328,7 @@ async def test_preflop_gpt_cant_cover_small_blind_button1(mock_ctx, poker_game, 
     mock_ctx.send.assert_any_call(
         "PokerGPT can't cover the small blind and is __All-in for 4 chips.__"
     )
-    mock_ctx.send.assert_any_call(f"{poker_game.players[0].player_name} calls.")
+    mock_ctx.send.assert_any_call(f"{poker_game.players[0].name} calls.")
     m.showdown.assert_awaited_once()
 
 @pytest.mark.asyncio
@@ -346,7 +346,7 @@ async def test_preflop_player_cant_cover_big_blind_button1(mock_ctx, poker_game,
     assert poker_game.players[0].round_pot_commitment == 7
     assert poker_game.players[1].round_pot_commitment == 7
     mock_ctx.send.assert_any_call(
-        f"{poker_game.players[0].player_name} is __All-in for 7 chips.__"
+        f"{poker_game.players[0].name} is __All-in for 7 chips.__"
     )
     mock_ctx.send.assert_any_call("PokerGPT __Calls.__")
     m.showdown.assert_awaited_once()

@@ -20,7 +20,7 @@ def test_deal_board():
     # Check that the board cards are unique
     assert len(set(str(card) for card in dealer.board)) == 5
 
-def test_return_community_cards():
+def test_board_str():
     dealer = Dealer(2)
     
     # Set specific board cards
@@ -31,14 +31,14 @@ def test_return_community_cards():
     ]
     
     # Get community cards as string
-    community_str = dealer.return_community_cards()
+    community_str = dealer.board_str()
     
     # Check that the string contains all cards
     assert "AS" in community_str
     assert "KH" in community_str
     assert "QD" in community_str
 
-def test_return_player_hand_str():
+def test_player_hand_str():
     dealer = Dealer(1)
     
     # Set specific player cards
@@ -46,13 +46,13 @@ def test_return_player_hand_str():
     dealer.players[0].card2 = Card(Rank.KING, Suit.HEARTS)
     
     # Get player hand as string
-    hand_str = dealer.return_player_hand_str(0)
+    hand_str = dealer.players[0].hand_str()
     
     # Check that the string contains both cards
     assert "AS" in hand_str
     assert "KH" in hand_str
 
-def test_all_in_call():
+def test_short_call_goes_all_in():
     game = PokerGameManager(buy_in=100)
     
     # Setup scenario where player 0 has less chips than current bet
@@ -63,7 +63,7 @@ def test_all_in_call():
     game.current_pot = 85  # 10 + 75
     
     # Player goes all-in as a call
-    game.player_all_in_call(0)
+    game.player_call(0)
     
     # Player should commit all their chips
     assert game.players[0].stack == 0
@@ -79,7 +79,7 @@ def test_all_in_call():
     # Pot should reflect the changes
     assert game.current_pot == 100  # 50 + 50
 
-def test_all_in_raise():
+def test_all_in():
     game = PokerGameManager(buy_in=100)
     
     # Setup scenario
@@ -88,7 +88,7 @@ def test_all_in_raise():
     game.players[0].round_pot_commitment = 10
     
     # Player goes all-in as a raise
-    game.player_all_in_raise(0)
+    game.player_all_in(0)
     
     # Check that player committed all chips
     assert game.players[0].stack == 0
@@ -101,17 +101,17 @@ def test_all_in_raise():
     (0, 1),
     (1, 0),
 ])
-def test_return_min_max_raise(player, other):
+def test_raise_limits(player, other):
     game = PokerGameManager()
     game.current_bet = 50
     game.players[player].stack = 400
     game.players[player].round_pot_commitment = 20
     game.players[other].stack = 1000
-    min_raise, max_raise = game.return_min_max_raise(player)
+    min_raise, max_raise = game.raise_limits(player)
     assert min_raise == 100                       # 50 * 2
     assert max_raise == 420                       # the raising player's own stack + commitment
 
-def test_player_all_in_call_refund():
+def test_short_call_refunds_bettor():
     game = PokerGameManager()
     game.current_bet = 200
     # player 1 has bet 200 already
@@ -121,7 +121,7 @@ def test_player_all_in_call_refund():
     game.players[0].stack = 100
     starting_stack_p1 = game.players[1].stack
 
-    game.player_all_in_call(0)
+    game.player_call(0)
 
     # bet should drop to 120, diff refunded to player 1
     assert game.current_bet == 120
@@ -130,17 +130,17 @@ def test_player_all_in_call_refund():
     assert game.players[1].round_pot_commitment == 120
     assert game.players[1].stack == starting_stack_p1 + 80   # refund
 
-def test_player_win_split_list():
+def test_award_pot_split():
     game = PokerGameManager()
     game.current_pot = 100
     p0, p1 = game.players
     stack0, stack1 = p0.stack, p1.stack
 
-    game.player_win([p0, p1])      # split
+    game.award_pot(p0, p1)      # split
     assert p0.stack == stack0 + 50
     assert p1.stack == stack1 + 50
 def test_min_raise_is_at_least_big_blind_with_no_bet():
     game = PokerGameManager()
     game.reset_betting()
-    min_raise, _ = game.return_min_max_raise(1)
+    min_raise, _ = game.raise_limits(1)
     assert min_raise == game.big_blind

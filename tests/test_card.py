@@ -1,4 +1,3 @@
-import pytest
 from game.card import Card, Rank, Suit
 
 def test_card_creation():
@@ -6,57 +5,33 @@ def test_card_creation():
     assert card.rank == Rank.ACE
     assert card.suit == Suit.SPADES
 
-def test_card_comparison():
+def test_card_equality():
     ace_spades = Card(Rank.ACE, Suit.SPADES)
-    king_hearts = Card(Rank.KING, Suit.HEARTS)
-    
-    # Test equality
-    assert ace_spades == ace_spades
-    assert ace_spades != king_hearts
-    
-    # Test greater than
-    assert ace_spades > king_hearts
-    assert not king_hearts > ace_spades
-    
-    # Test less than
-    assert king_hearts < ace_spades
-    assert not ace_spades < king_hearts
-    
-    # Test comparison with Rank
-    assert ace_spades == Rank.ACE
-    assert ace_spades != Rank.KING
 
-    # Test comparison with int
-    assert ace_spades == 0  # ACE is 0 in enum
+    assert ace_spades == Card(Rank.ACE, Suit.SPADES)
+    assert ace_spades != Card(Rank.ACE, Suit.HEARTS)
+    assert ace_spades != Card(Rank.KING, Suit.SPADES)
+    assert ace_spades != "AS"
 
-def test_card_add():
-    ace_spades = Card(Rank.ACE, Suit.SPADES)
-    
-    # Test adding int
-    assert ace_spades + 1 == Rank.TWO
-    assert ace_spades + 12 == Rank.KING
-    
-    # Test overflow
-    assert ace_spades + 13 == Rank.ACE
+def test_cards_are_hashable():
+    assert len({Card(Rank.ACE, Suit.SPADES), Card(Rank.ACE, Suit.SPADES), Card(Rank.KING, Suit.SPADES)}) == 2
+
+def test_rank_ordering():
+    # Ace is high
+    assert Rank.ACE > Rank.KING > Rank.QUEEN > Rank.JACK > Rank.TEN > Rank.TWO
+    assert sorted(Rank) == list(Rank)
 
 def test_card_string_representation():
     ace_spades = Card(Rank.ACE, Suit.SPADES)
     ten_hearts = Card(Rank.TEN, Suit.HEARTS)
-    
+    two_clubs = Card(Rank.TWO, Suit.CLUBS)
+    queen_diamonds = Card(Rank.QUEEN, Suit.DIAMONDS)
+
     assert str(ace_spades) == "AS"
     assert str(ten_hearts) == "10H"
-    
+    assert str(two_clubs) == "2C"
+    assert str(queen_diamonds) == "QD"
+
     assert ace_spades.long_str() == "Ace of Spades"
     assert ten_hearts.long_str() == "10 of Hearts"
-
-def test_invalid_comparison():
-    card = Card(Rank.ACE, Suit.SPADES)
-    with pytest.raises(TypeError):
-        card == "AS"
-      
-def test_card_add_wraps_mod_13():
-    base = Card(Rank.ACE, Suit.SPADES)
-    for k in range(26):  # Test values from 0 to 25
-        result_rank = base + k
-        expected_value = (base.rank.value + k) % 13
-        assert result_rank.value == expected_value
+    assert queen_diamonds.long_str() == "Queen of Diamonds"

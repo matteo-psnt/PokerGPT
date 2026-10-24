@@ -1,5 +1,5 @@
 from game.poker import Dealer
-from game.player import handRank
+from game.player import HandRank
 from game.card import Card, Rank, Suit
 
 def test_royal_flush():
@@ -19,7 +19,7 @@ def test_royal_flush():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.ROYAL_FLUSH
+    assert rank == HandRank.ROYAL_FLUSH
     assert len(hand) == 5
     assert hand[0].rank == Rank.ACE
     assert all(card.suit == Suit.SPADES for card in hand)
@@ -41,7 +41,7 @@ def test_straight_flush():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.STRAIGHT_FLUSH
+    assert rank == HandRank.STRAIGHT_FLUSH
     assert len(hand) == 5
     assert hand[0].rank == Rank.NINE
     assert all(card.suit == Suit.HEARTS for card in hand)
@@ -63,7 +63,7 @@ def test_four_of_a_kind():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.FOUR_OF_A_KIND
+    assert rank == HandRank.FOUR_OF_A_KIND
     assert len(hand) == 5
     assert sum(1 for card in hand if card.rank == Rank.KING) == 4
     assert any(card.rank == Rank.ACE for card in hand)
@@ -85,7 +85,7 @@ def test_full_house():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.FULL_HOUSE
+    assert rank == HandRank.FULL_HOUSE
     assert len(hand) == 5
     assert sum(1 for card in hand if card.rank == Rank.ACE) == 3
     assert sum(1 for card in hand if card.rank == Rank.KING) == 2
@@ -107,7 +107,7 @@ def test_flush():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.FLUSH
+    assert rank == HandRank.FLUSH
     assert len(hand) == 5
     assert all(card.suit == Suit.DIAMONDS for card in hand)
 
@@ -128,7 +128,7 @@ def test_straight():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.STRAIGHT
+    assert rank == HandRank.STRAIGHT
     assert len(hand) == 5
     assert hand[0].rank == Rank.EIGHT
 
@@ -149,7 +149,7 @@ def test_three_of_a_kind():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.THREE_OF_A_KIND
+    assert rank == HandRank.THREE_OF_A_KIND
     assert len(hand) == 5
     assert sum(1 for card in hand if card.rank == Rank.QUEEN) == 3
     assert any(card.rank == Rank.ACE for card in hand)
@@ -172,7 +172,7 @@ def test_two_pair():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.TWO_PAIR
+    assert rank == HandRank.TWO_PAIR
     assert len(hand) == 5
     assert sum(1 for card in hand if card.rank == Rank.ACE) == 2
     assert sum(1 for card in hand if card.rank == Rank.KING) == 2
@@ -195,7 +195,7 @@ def test_pair():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.PAIR
+    assert rank == HandRank.PAIR
     assert len(hand) == 5
     assert sum(1 for card in hand if card.rank == Rank.JACK) == 2
     assert any(card.rank == Rank.ACE for card in hand)
@@ -219,7 +219,7 @@ def test_high_card():
     
     rank, hand = dealer.get_hand_rank(player)
     
-    assert rank == handRank.HIGH_CARD
+    assert rank == HandRank.HIGH_CARD
     assert len(hand) == 5
     assert hand[0].rank == Rank.ACE
     assert hand[1].rank == Rank.KING
@@ -243,7 +243,7 @@ def test_pair_kickers_when_pair_is_second_highest():
 
     rank, hand = dealer.get_hand_rank(player)
 
-    assert rank == handRank.PAIR
+    assert rank == HandRank.PAIR
     assert [card.rank for card in hand] == [Rank.KING, Rank.KING, Rank.ACE, Rank.JACK, Rank.NINE]
 
 def test_pair_kicker_decides_winner():
@@ -266,7 +266,7 @@ def test_pair_kicker_decides_winner():
     dealer.evaluate_hands()
 
     assert [card.rank for card in p1.hand_played] == [Rank.NINE, Rank.NINE, Rank.ACE, Rank.QUEEN, Rank.SEVEN]
-    assert dealer.determine_winner() == p2
+    assert dealer.determine_winners() == [p2]
 
 def test_same_ranks_different_suits_split_pot():
     dealer = Dealer(2)
@@ -286,7 +286,4 @@ def test_same_ranks_different_suits_split_pot():
     ]
 
     dealer.evaluate_hands()
-    winners = dealer.determine_winner()
-
-    assert isinstance(winners, list)
-    assert p1 in winners and p2 in winners
+    assert dealer.determine_winners() == [p1, p2]

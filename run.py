@@ -100,8 +100,8 @@ async def play_poker(
     await ctx.send(f"The small blind is {small_blind} chips and the big blind is {big_blind} chips.")
 
     poker = PokerGameManager(buy_in, small_blind, big_blind)
-    poker.set_player_name(0, ctx.author.name)
-    poker.set_player_name(1, "PokerGPT")
+    poker.players[0].name = ctx.author.name
+    poker.players[1].name = "PokerGPT"
     poker.new_round()
 
     session = Session()
