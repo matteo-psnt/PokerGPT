@@ -51,7 +51,6 @@ class PokerGameManager(Dealer):
         self.small_blind = small_blind
         self.big_blind = big_blind
         self.button = 0
-        self.current_action = 0
         self.round = Round.PRE_FLOP
         self.current_pot = 0
         self.current_bet = 0
@@ -66,7 +65,6 @@ class PokerGameManager(Dealer):
         self.current_pot = 0
         self.current_bet = 0
         self.button = (self.button + 1) % len(self.players)
-        self.current_action = self.button
         self.round = Round.PRE_FLOP
 
     def reset_betting(self):

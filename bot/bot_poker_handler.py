@@ -6,627 +6,427 @@ from bot.gpt_player import GPTPlayer
 from config.log_config import logger
 from db.db_utils import DatabaseManager
 from db.enums import ActionType, Round
-from game.poker import PokerGameManager
+from game.player import Player
+from game.poker import GPT, USER, PokerGameManager
+
+NEXT_ROUND = {Round.PRE_FLOP: Round.FLOP, Round.FLOP: Round.TURN, Round.TURN: Round.RIVER, Round.RIVER: Round.SHOWDOWN}
+BOARD_SIZE = {Round.FLOP: 3, Round.TURN: 4, Round.RIVER: 5}
 
 
 class DiscordPokerManager:
-    def __init__(self, ctx, pokerGame: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float,
+    def __init__(self, ctx, poker_game: PokerGameManager, db_manager: DatabaseManager, small_cards: bool, timeout: float,
                  model_name: str = "gpt-6-luna"):
         self.ctx = ctx
-        self.pokerGame: PokerGameManager = pokerGame
-        self.db_manager: DatabaseManager = db_manager
-        self.small_cards: bool = small_cards
-        self.timeout: float = timeout
-        self.model_name: str = model_name
+        self.game = poker_game
+        self.db = db_manager
+        self.small_cards = small_cards
+        self.timeout = timeout
+        self.model_name = model_name
+        self.gpt_player = GPTPlayer(db_manager, model_name=model_name)
 
-        db_manager.initialize_game(pokerGame.small_blind, pokerGame.big_blind, pokerGame.starting_stack)
+        db_manager.initialize_game(poker_game.small_blind, poker_game.big_blind, poker_game.starting_stack)
+
+    @property
+    def user(self) -> Player:
+        return self.game.players[USER]
+
+    @property
+    def pokergpt(self) -> Player:
+        return self.game.players[GPT]
+
+    def log(self, message: str):
+        logger.info(f"{self.ctx.author.name} - {message}")
+
+    async def send(self, content: str, **kwargs):
+        return await self.ctx.send(content, **kwargs)
+
+    async def send_cards(self, cards):
+        await self.ctx.send(get_cards(cards, self.small_cards))
 
     async def play_round(self):
-        self.pokerGame.new_round()
-        self.gpt_action = GPTPlayer(self.db_manager, model_name=self.model_name)
-        self.db_manager.initialize_hand(self.pokerGame.players[0].hand_str(), self.pokerGame.players[1].hand_str(), self.pokerGame.players[0].stack)
-        logger.info(f"{self.ctx.author.name} - Starting a new round.")
-        logger.info(f"{self.ctx.author.name} - Player has {self.pokerGame.players[0].stack} chips, PokerGPT has {self.pokerGame.players[1].stack} chips.")
+        self.game.new_round()
+        self.db.initialize_hand(self.user.hand_str(), self.pokergpt.hand_str(), self.user.stack)
+        self.log("Starting a new round.")
+        self.log(f"Player has {self.user.stack} chips, PokerGPT has {self.pokergpt.stack} chips.")
         await self.pre_flop()
 
     async def pre_flop(self):
-        logger.info(f"{self.ctx.author.name} - Pre-flop")
-        self.pokerGame.round = Round.PRE_FLOP
-        self.pokerGame.reset_betting()
-        await self.ctx.send("**Your Cards:**")
-        await self.ctx.send(get_cards(self.pokerGame.players[0].hand, self.small_cards))
-        logger.info(f"{self.ctx.author.name} - Player has {self.pokerGame.players[0].hand_str()}, PokerGPT has {self.pokerGame.players[1].hand_str()}")
-        if self.pokerGame.button == 0: # Player is small blind, PokerGPT is big blind
-            # PokerGPT can't cover small blind
-            if self.pokerGame.players[1].stack <= self.pokerGame.small_blind:
-                logger.info(f"{self.ctx.author.name} - PokerGPT can't cover small blind and is all-in for {self.pokerGame.players[1].stack} chips.")
-                await self.ctx.send(f"PokerGPT can't cover small blind and is __All-in for {self.pokerGame.players[1].stack} chips.__")
-                await self.ctx.send(f"{self.pokerGame.players[0].name} calls.")
-                self.pokerGame.player_raise(1, self.pokerGame.players[1].stack)
-                self.pokerGame.player_call(0)
-                return await self.showdown()
-            
-            # Player can't cover small blind
-            if self.pokerGame.players[0].stack <= self.pokerGame.small_blind:
-                logger.info(f"{self.ctx.author.name} - Player can't cover small blind and is all-in for {self.pokerGame.players[0].stack} chips.")
-                await self.ctx.send(f"{self.pokerGame.players[0].name} can't cover small blind and is __All-in for {self.pokerGame.players[0].stack} chips.__")
-                await self.ctx.send(f"PokerGPT calls.")
-                self.pokerGame.player_raise(0, self.pokerGame.players[0].stack)
-                self.pokerGame.player_call(1)
-                return await self.showdown()
+        game = self.game
+        game.round = Round.PRE_FLOP
+        game.reset_betting()
+        # Heads-up, the button posts the small blind
+        sb, bb = game.button, 1 - game.button
+        small, big = game.players[sb], game.players[bb]
 
-            # PokerGPT can't cover big blind
-            if self.pokerGame.players[1].stack <= self.pokerGame.big_blind:
-                await self.ctx.send(f"{self.pokerGame.players[0].name} places small blind of {self.pokerGame.small_blind} chips.")
-                await self.ctx.send(f"PokerGPT can't cover big blind and is __All-in for {self.pokerGame.players[1].stack} chips.__")
-                self.pokerGame.player_raise(0, self.pokerGame.small_blind)
-                self.pokerGame.player_raise(1, self.pokerGame.players[1].stack)
-                view = self.allInCallView(self)
-                await self.ctx.send(f"You have {self.pokerGame.players[0].stack} chips.")
-                await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it costs {self.pokerGame.players[1].round_pot_commitment - self.pokerGame.players[0].round_pot_commitment} more to call.", view=view)
-                return
+        self.log(f"Pre-flop: Player has {self.user.hand_str()}, PokerGPT has {self.pokergpt.hand_str()}")
+        await self.send("**Your Cards:**")
+        await self.send_cards(self.user.hand)
 
-            # Player can't cover big blind
-            if self.pokerGame.players[0].stack <= self.pokerGame.big_blind:
-                await self.ctx.send(f"{self.pokerGame.players[0].name} places small blind of {self.pokerGame.small_blind} chips.")
-                await self.ctx.send(f"PokerGPT puts you __All-in for {self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment} chips.__")
-                self.pokerGame.player_raise(0, self.pokerGame.small_blind)
-                self.pokerGame.player_raise(1, self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment)
-                view = self.allInCallView(self)
-                await self.ctx.send(f"You have {self.pokerGame.players[0].stack} chips.")
-                await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it costs {self.pokerGame.players[1].round_pot_commitment - self.pokerGame.players[0].round_pot_commitment} more to call.", view=view)
-                return
+        # A player who can't cover the small blind is all-in and called straight to showdown
+        short = next((p for p in (bb, sb) if game.players[p].stack <= game.small_blind), None)
+        if short is not None:
+            caller = 1 - short
+            await self.send(f"{game.players[short].name} can't cover the small blind and is __All-in for {game.players[short].stack} chips.__")
+            await self.send(f"{game.players[caller].name} calls.")
+            game.player_all_in(short)
+            game.player_call(caller)
+            return await self.showdown()
 
-            # Regular scenario, both players can cover blinds
-            await self.ctx.send(f"PokerGPT places big blind of {self.pokerGame.big_blind} chips, and {self.pokerGame.players[0].name} places small blind of {self.pokerGame.small_blind} chips.")
-            self.pokerGame.player_raise(0, self.pokerGame.small_blind)
-            self.pokerGame.player_raise(1, self.pokerGame.big_blind)
-
-            view = self.callView(self)
-            await self.ctx.send(f"You have {self.pokerGame.players[0].stack} chips.")
-            await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment}", view=view)
-
-        elif self.pokerGame.button == 1: # PokerGPT is small blind, player is big blind
-            # Player can't cover small blind
-            if self.pokerGame.players[0].stack <= self.pokerGame.small_blind:
-                logger.info(f"{self.ctx.author.name} - Player can't cover small blind and is all-in for {self.pokerGame.players[0].stack} chips.")
-                await self.ctx.send(f"{self.pokerGame.players[0].name} can't cover small blind and is __All-in for {self.pokerGame.players[0].stack} chips.__")
-                await self.ctx.send(f"PokerGPT calls.")
-                self.pokerGame.player_raise(0, self.pokerGame.players[0].stack)
-                self.pokerGame.player_call(1)
-                return await self.showdown()
-            
-            # PokerGPT can't cover the small blind
-            if self.pokerGame.players[1].stack <= self.pokerGame.small_blind:
-                await self.ctx.send(f"PokerGPT can't cover the small blind and is __All-in for {self.pokerGame.players[1].stack} chips.__")
-                await self.ctx.send(f"{self.pokerGame.players[0].name} calls.")
-                self.pokerGame.player_raise(1, self.pokerGame.players[1].stack)
-                self.pokerGame.player_call(0)
-                return await self.showdown()
-
-            # Player can't cover the big blind
-            if self.pokerGame.players[0].stack <= self.pokerGame.big_blind:
-                await self.ctx.send(f"PokerGPT places the small blind of {self.pokerGame.small_blind} chips.")
-                await self.ctx.send(f"{self.pokerGame.players[0].name} is __All-in for {self.pokerGame.players[0].stack} chips.__")
-                self.pokerGame.player_raise(1, self.pokerGame.small_blind)
-                self.pokerGame.player_raise(0, self.pokerGame.players[0].stack)
-                self.pokerGame.player_call(1)
-                await self.ctx.send("PokerGPT __Calls.__")
-                return await self.showdown()
-            
-            # PokerGPT can't cover the big blind
-            if self.pokerGame.players[1].stack <= self.pokerGame.big_blind:
-                await self.ctx.send(f"PokerGPT places small blind of {self.pokerGame.small_blind} chips.")
-                await self.ctx.send(f"You put PokerGPT __All-in for {self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment} chips.__")
-                await self.ctx.send(f"PokerGPT __Calls All-in.__")
-                self.pokerGame.player_raise(0, self.pokerGame.small_blind)
-                self.pokerGame.player_raise(1, self.pokerGame.players[1].stack)
-                self.pokerGame.player_call(0)
-                return await self.showdown()
-
-            # Regular scenario, both players can cover blinds
-            await self.ctx.send(f"{self.pokerGame.players[0].name} places big blind of {self.pokerGame.big_blind} chips, and PokerGPT places small blind of {self.pokerGame.small_blind} chips.")
-            self.pokerGame.player_raise(1, self.pokerGame.small_blind)
-            self.pokerGame.player_raise(0, self.pokerGame.big_blind)
-
-            action, raise_amount = await self.gpt_action.pre_flop_small_blind(self.pokerGame)
-            if action == ActionType.CALL:
-                logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
-                await self.ctx.send("PokerGPT __Calls.__")
-                self.pokerGame.player_call(1)
-                await self.next_action()
-            elif action == ActionType.ALL_IN:
-                await self.pokerGPT_all_in()
-            elif action == ActionType.FOLD:
-                await self.pokerGPT_fold()
-            elif action == ActionType.RAISE:
-                await self.pokerGPT_raise(raise_amount)
+        # A player who can't cover the big blind is all-in, and the big blind is posted up to that amount
+        short = next((p for p in (bb, sb) if game.players[p].stack <= game.big_blind), None)
+        if short is not None:
+            all_in = game.players[short].stack
+            await self.send(f"{small.name} places small blind of {game.small_blind} chips.")
+            if short == bb:
+                await self.send(f"{big.name} can't cover the big blind and is __All-in for {all_in} chips.__")
             else:
-                logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
-                await self.pokerGPT_fold()
+                await self.send(f"{big.name} puts {small.name} __All-in for {all_in} chips.__")
+            game.player_raise(sb, game.small_blind)
+            game.player_raise(bb, all_in)
 
-    async def deal_community_cards(self, round_name: Round):
-        # Set the current round and deal the community cards
-        self.pokerGame.round = round_name
-        self.pokerGame.reset_betting()
-        if round_name == Round.FLOP:
-            self.pokerGame.deal_board(3)
-        elif round_name == Round.TURN:
-            self.pokerGame.deal_board(4)
-        elif round_name == Round.RIVER:
-            self.pokerGame.deal_board(5)
+            if sb == USER:
+                await self.send(f"You have {self.user.stack} chips.")
+                await self.send(f"What do you want to do? You are in for {self.user.round_pot_commitment} chips, "
+                                f"it costs {game.amount_to_call(USER)} more to call.", view=AllInCallView(self))
+            else:
+                await self.send("PokerGPT __Calls All-in.__")
+                game.player_call(GPT)
+                await self.showdown()
+            return
 
-        # Announce the community cards
-        logger.info(f"{self.ctx.author.name} - {round_name.value.capitalize()} {self.pokerGame.board_str()}")
-        await self.ctx.send(f"**Community Cards ({round_name.value.capitalize()}):**")
-        await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
+        await self.send(f"{big.name} places big blind of {game.big_blind} chips, and {small.name} places small blind of {game.small_blind} chips.")
+        game.player_raise(sb, game.small_blind)
+        game.player_raise(bb, game.big_blind)
 
-        # Announce the current pot and player stacks
-        await self.ctx.send(f"**Main pot:** {self.pokerGame.current_pot} chips.")
-        await self.ctx.send(f"**{self.pokerGame.players[0].name} stack:** {self.pokerGame.players[0].stack} chips.")
-        await self.ctx.send(f"**PokerGPT stack:** {self.pokerGame.players[1].stack} chips.")
-
-        # Determine who is first to act and prompt them for their move
-        if self.pokerGame.button == 0:
-            await self.pokerGPT_acts_first()
-        elif self.pokerGame.button == 1:
-            await self.user_acts_first()
-
-    async def showdown(self):
-        await self.ctx.send("***Showdown!!***")
-        self.pokerGame.round = Round.SHOWDOWN
-        
-        # Deal and Display the community cards
-        self.pokerGame.deal_board(5)
-        await self.ctx.send("**Community Cards:**")
-        await self.ctx.send(get_cards(self.pokerGame.board, self.small_cards))
-        logger.info(f"{self.ctx.author.name} - Showdown {self.pokerGame.board_str()}")
-        
-        # Evaluate each player's hand
-        self.pokerGame.evaluate_hands()
-
-        # Display each player's hand and hand rank
-        for player in self.pokerGame.players:
-            await self.ctx.send(f"{player.name} has:")
-            await self.ctx.send(get_cards(player.hand, self.small_cards))
-
-            await self.ctx.send(f"**{player.hand_rank}**")
-            await self.ctx.send(get_cards(player.hand_played, self.small_cards))
-            logger.info(f"{self.ctx.author.name} - {player.name} has {player.hand_rank}")
-
-        # Determine the winner(s) and handle the pot
-        winners = self.pokerGame.determine_winners()
-        if len(winners) > 1:
-            # Split pot
-            logger.info(f"{self.ctx.author.name} - Split pot")
-            await self.ctx.send("**Split pot!!!**")
-            split_pot = self.pokerGame.current_pot // 2
-            self.pokerGame.award_pot(*winners)
-            await self.ctx.send(f"{self.pokerGame.players[0].name} wins {split_pot} chips and has {self.pokerGame.players[0].stack} chips.")
-            await self.ctx.send(f"PokerGPT wins {split_pot} chips and has {self.pokerGame.players[1].stack} chips.")
-            
+        if sb == USER:
+            await self.send(f"You have {self.user.stack} chips.")
+            await self.send(f"What do you want to do? You are in for {self.user.round_pot_commitment}", view=CallView(self))
         else:
-            # Single winner
-            winner = winners[0]
-            pot = self.pokerGame.current_pot
-            self.pokerGame.award_pot(winner)
-            logger.info(f"{self.ctx.author.name} - {winner.name} wins {pot} chips")
-            await self.ctx.send(f"{winner.name} wins **{pot} chips** and has {winner.stack} chips.")
+            action, raise_amount = await self.gpt_player.pre_flop_small_blind(game)
+            await self.gpt_acts(action, raise_amount, call_message="PokerGPT __Calls.__")
 
-        # Check if either player is out of chips
-        self.db_manager.update_community_cards(self.pokerGame.board_str())
-        self.db_manager.end_hand(self.pokerGame.players[0].stack, Round.SHOWDOWN)
-        embed = self.result_embed()
-        if self.pokerGame.players[0].stack == 0:
-            await self.ctx.send(f"{self.pokerGame.players[1].name} wins the game! {self.pokerGame.players[0].name} is out of chips.", embeds=[embed])
-            self.db_manager.end_game(self.pokerGame.players[0].stack)
-        elif self.pokerGame.players[1].stack == 0:
-            await self.ctx.send(f"{self.pokerGame.players[0].name} wins the game! {self.pokerGame.players[1].name} is out of chips.", embeds=[embed])
-            self.db_manager.end_game(self.pokerGame.players[0].stack)
+    async def next_street(self):
+        game = self.game
+        game.round = NEXT_ROUND[game.round]
+        if game.round == Round.SHOWDOWN:
+            return await self.showdown()
+
+        game.reset_betting()
+        game.deal_board(BOARD_SIZE[game.round])
+        round_name = game.round.value.capitalize()
+        self.log(f"{round_name} {game.board_str()}")
+        await self.send(f"**Community Cards ({round_name}):**")
+        await self.send_cards(game.board)
+        await self.send(f"**Main pot:** {game.current_pot} chips.")
+        await self.send(f"**{self.user.name} stack:** {self.user.stack} chips.")
+        await self.send(f"**PokerGPT stack:** {self.pokergpt.stack} chips.")
+
+        # After the flop the big blind acts first
+        await self.offer_check(1 - game.button)
+
+    # asks a player to act when there is no bet for them to face
+    async def offer_check(self, player: int):
+        game = self.game
+        if player == USER:
+            await self.send("What do you want to do?", view=CheckView(self))
+        elif game.round == Round.PRE_FLOP:
+            await self.gpt_acts(*await self.gpt_player.pre_flop_big_blind(game))
+        elif game.button == USER:
+            await self.gpt_acts(*await self.gpt_player.first_to_act(game))
         else:
-            # Prompt to play another round
-            await self.ctx.respond("Play another round?")
-            await self.ctx.send("", view=self.newRoundView(self))
+            await self.gpt_acts(*await self.gpt_player.player_check(game))
 
-    async def user_acts_first(self):
-        view = self.checkView(self)
-        await self.ctx.send(f"What do you want to do?", view=view)
+    async def after_check(self, player: int):
+        # The big blind's check closes the action pre-flop, and the button's check closes it after the flop
+        if self.game.round == Round.PRE_FLOP or player == self.game.button:
+            await self.next_street()
+        else:
+            await self.offer_check(1 - player)
 
-    async def pokerGPT_acts_first(self):
-        action, raise_amount = await self.gpt_action.first_to_act(self.pokerGame)
+    async def after_call(self):
+        game = self.game
+        if any(player.stack == 0 for player in game.players):
+            # Someone is all-in, so there's no more betting
+            await self.showdown()
+        elif game.round == Round.PRE_FLOP and game.current_bet == game.big_blind:
+            # The small blind limped in, so the big blind still gets to act
+            await self.offer_check(1 - game.button)
+        else:
+            await self.next_street()
 
+    async def gpt_acts(self, action: ActionType, raise_amount: int | None, call_message: str | None = None):
         if action == ActionType.CHECK:
-            logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
-            await self.ctx.send("PokerGPT __Checks.__")
-            await self.next_action()
-        elif action == ActionType.ALL_IN:
-            await self.pokerGPT_all_in()
+            self.log("PokerGPT Checks.")
+            await self.send("PokerGPT __Checks.__")
+            await self.after_check(GPT)
+        elif action == ActionType.CALL:
+            self.log("PokerGPT Calls.")
+            await self.send(call_message)
+            self.game.player_call(GPT)
+            await self.after_call()
         elif action == ActionType.RAISE:
-            await self.pokerGPT_raise(raise_amount)
+            await self.gpt_raise(raise_amount)
+        elif action == ActionType.ALL_IN:
+            await self.gpt_all_in()
         else:
-            logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
-            await self.ctx.send("PokerGPT __Checks.__")
-            await self.next_action()
+            await self.gpt_fold()
+
+    async def gpt_raise(self, amount: int):
+        self.log(f"PokerGPT raises to {amount} chips")
+        await self.send(f"PokerGPT __Raises to {amount} chips.__")
+        self.game.player_raise(GPT, amount)
+        await self.send(f"**Main pot:** {self.game.current_pot} chips")
+
+        if self.user.total_chips <= self.game.current_bet:
+            await self.send(f"PokerGPT puts you __All-In for {self.user.total_chips} chips.__")
+            view = AllInCallView(self)
+        else:
+            view = CallView(self)
+        await self.send(f"What do you want to do? You are in for {self.user.round_pot_commitment} chips, "
+                        f"it costs __{self.game.amount_to_call(USER)} more to call.__", view=view)
+
+    async def gpt_all_in(self):
+        self.log("PokerGPT goes All-in")
+        await self.send(f"PokerGPT is __All-in for {self.pokergpt.total_chips} chips.__")
+        self.game.player_all_in(GPT)
+        await self.send(f"What do you want to do? You are in for {self.user.round_pot_commitment} chips, "
+                        f"it is {self.game.amount_to_call(USER)} more to call", view=AllInCallView(self))
+
+    async def gpt_fold(self):
+        self.log("PokerGPT Folds.")
+        await self.send("PokerGPT Folds.")
+        await self.send(f"You win __{self.game.current_pot} chips.__")
+        await self.award_uncontested_pot(self.user)
+
+    async def user_check(self):
+        self.log("User Checks.")
+        await self.after_check(USER)
+
+    async def user_call(self):
+        self.log("User Calls.")
+        self.game.player_call(USER)
+        await self.after_call()
 
     async def user_raise(self, amount: int):
-        logger.info(f"{self.ctx.author.name} - User raises to {amount} chips")
-        # Raise the player's bet
-        self.pokerGame.player_raise(0, amount)
-
-        # Get GPT's move and handle it
-        action, raise_amount = await self.gpt_action.player_raise(self.pokerGame)
-
-        if action == ActionType.CALL:
-            logger.info(f"{self.ctx.author.name} - PokerGPT Calls.")
-            await self.ctx.send("PokerGPT __Calls Raise.__")
-            self.pokerGame.player_call(1)
-            await self.next_action()
-        elif action == ActionType.FOLD:
-            await self.pokerGPT_fold()
-        elif action == ActionType.ALL_IN:
-            await self.pokerGPT_all_in()
-        elif action == ActionType.RAISE:
-            await self.pokerGPT_raise(raise_amount)
-        else:
-            logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
-            await self.pokerGPT_fold()
-
-    async def pokerGPT_raise(self, amount: int):
-        logger.info(f"{self.ctx.author.name} - PokerGPT raises to {amount} chips")
-        # Raise the bet and announce it
-        await self.ctx.send(f"PokerGPT __Raises to {amount} chips.__")
-        self.pokerGame.player_raise(1, amount)
-        await self.ctx.send(f"**Main pot:** {self.pokerGame.current_pot} chips")
-
-        # Check if the player needs to go all-in
-        if (self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment <= self.pokerGame.current_bet):
-            await self.ctx.send(f"PokerGPT puts you __All-In for {self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment} chips.__")
-            view = self.allInCallView(self)
-        else:
-            view = self.callView(self)
-
-        # Prompt the player for their action
-        await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it costs __{self.pokerGame.current_bet - self.pokerGame.players[0].round_pot_commitment} more to call.__", view=view)
+        self.log(f"User raises to {amount} chips")
+        self.game.player_raise(USER, amount)
+        action, raise_amount = await self.gpt_player.player_raise(self.game)
+        await self.gpt_acts(action, raise_amount, call_message="PokerGPT __Calls Raise.__")
 
     async def user_all_in(self):
-        logger.info(f"{self.ctx.author.name} - User goes All-in")
-        self.pokerGame.player_all_in(0)
-        action, raise_amount = await self.gpt_action.player_all_in(self.pokerGame)
-
-        if action == ActionType.CALL:
-            logger.info(f"{self.ctx.author.name} - PokerGPT Calls All-in.")
-            await self.ctx.send(f"PokerGPT __Calls All-in.__")
-            self.pokerGame.player_call(1)
-            await self.showdown()
-        elif action == ActionType.FOLD:
-            await self.pokerGPT_fold()
-        else:
-            logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Fold")
-            await self.pokerGPT_fold()
-
-    async def pokerGPT_all_in(self):
-        logger.info(f"{self.ctx.author.name} - PokerGPT goes All-in")
-        await self.ctx.send(f"PokerGPT is __All-in for {self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment} chips.__")
-        self.pokerGame.player_all_in(1)
-        view = self.allInCallView(self)
-        await self.ctx.send(f"What do you want to do? You are in for {self.pokerGame.players[0].round_pot_commitment} chips, it is {self.pokerGame.current_bet - self.pokerGame.players[0].round_pot_commitment} more to call", view=view)
+        self.log("User goes All-in")
+        self.game.player_all_in(USER)
+        action, raise_amount = await self.gpt_player.player_all_in(self.game)
+        await self.gpt_acts(action, raise_amount, call_message="PokerGPT __Calls All-in.__")
 
     async def user_fold(self):
-        logger.info(f"{self.ctx.author.name} - User Folds.")
-        await self.ctx.send(f"PokerGPT wins __{self.pokerGame.current_pot} chips.__")
-        self.pokerGame.award_pot(self.pokerGame.players[1])
-        await self.ctx.send(f"You have {self.pokerGame.players[0].stack} chips.")
-        await self.ctx.send(f"PokerGPT has {self.pokerGame.players[1].stack} chips.")
-        await self.new_round_prompt()
+        self.log("User Folds.")
+        await self.send(f"PokerGPT wins __{self.game.current_pot} chips.__")
+        await self.award_uncontested_pot(self.pokergpt)
 
-    async def pokerGPT_fold(self):
-        logger.info(f"{self.ctx.author.name} - PokerGPT Folds.")
-        await self.ctx.send("PokerGPT Folds.")
-        await self.ctx.send(f"You win __{self.pokerGame.current_pot} chips.__")
-        self.pokerGame.award_pot(self.pokerGame.players[0])
-        await self.ctx.send(f"You have {self.pokerGame.players[0].stack} chips.")
-        await self.ctx.send(f"PokerGPT has {self.pokerGame.players[1].stack} chips.")
-        await self.new_round_prompt()
+    async def award_uncontested_pot(self, winner: Player):
+        self.game.award_pot(winner)
+        await self.send(f"You have {self.user.stack} chips.")
+        await self.send(f"PokerGPT has {self.pokergpt.stack} chips.")
+        self.end_hand()
+        await self.prompt_new_round()
 
-    async def new_round_prompt(self):
-        self.db_manager.update_community_cards(self.pokerGame.board_str())
-        self.db_manager.end_hand(self.pokerGame.players[0].stack, self.pokerGame.round)
-        await self.ctx.respond("Play another round?")
-        await self.ctx.send("", view=self.newRoundView(self))
+    async def showdown(self):
+        game = self.game
+        await self.send("***Showdown!!***")
+        game.round = Round.SHOWDOWN
 
-    async def move_to_next_betting_round(self):
-        self.pokerGame.current_action = self.pokerGame.button
-        if self.pokerGame.round == Round.PRE_FLOP:
-            await self.deal_community_cards(Round.FLOP)
-        elif self.pokerGame.round == Round.FLOP:
-            await self.deal_community_cards(Round.TURN)
-        elif self.pokerGame.round == Round.TURN:
-            await self.deal_community_cards(Round.RIVER)
-        elif self.pokerGame.round == Round.RIVER:
-            await self.showdown()
+        game.deal_board(5)
+        await self.send("**Community Cards:**")
+        await self.send_cards(game.board)
+        self.log(f"Showdown {game.board_str()}")
 
-    async def next_action(self):
-        self.pokerGame.current_action = (self.pokerGame.current_action + 1) % 2
-        if self.pokerGame.round == Round.PRE_FLOP:
-            if self.pokerGame.current_bet > self.pokerGame.big_blind:
-                await self.move_to_next_betting_round()
-                return
-            if self.pokerGame.button == 0:
-                action, raise_amount = await self.gpt_action.pre_flop_big_blind(self.pokerGame)
-                
-                if action == ActionType.CHECK:
-                    logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
-                    await self.ctx.send("PokerGPT __Checks.__")
-                    await self.move_to_next_betting_round()
-                    return
-                elif action == ActionType.ALL_IN:
-                    await self.pokerGPT_all_in()
-                    return
-                elif action == ActionType.RAISE:
-                    await self.pokerGPT_raise(raise_amount)
-                    return
-                else:
-                    logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
-                    await self.ctx.send("PokerGPT __Checks.__")
-                    await self.move_to_next_betting_round()
-                    return
+        game.evaluate_hands()
+        for player in game.players:
+            await self.send(f"{player.name} has:")
+            await self.send_cards(player.hand)
+            await self.send(f"**{player.hand_rank}**")
+            await self.send_cards(player.hand_played)
+            self.log(f"{player.name} has {player.hand_rank}")
 
-            if self.pokerGame.button == 1:
-                if self.pokerGame.current_action == 0:
-                    view = self.checkView(self)
-                    await self.ctx.send(f"What do you want to do?", view=view)
-                    return
-                elif self.pokerGame.current_action == 1:
-                    await self.move_to_next_betting_round()
+        winners = game.determine_winners()
+        pot = game.current_pot
+        game.award_pot(*winners)
+        if len(winners) > 1:
+            self.log("Split pot")
+            await self.send("**Split pot!!!**")
+            for player in winners:
+                await self.send(f"{player.name} wins {pot // len(winners)} chips and has {player.stack} chips.")
         else:
-            if self.pokerGame.current_bet > 0:
-                await self.move_to_next_betting_round()
-                return
-            if self.pokerGame.button == 0:
-                if self.pokerGame.current_action == 1:
-                    view = self.checkView(self)
-                    await self.ctx.send(f"What do you want to do?", view=view)
-                    return
-                elif self.pokerGame.current_action == 0:
-                    await self.move_to_next_betting_round()
-            elif self.pokerGame.button == 1:
-                action, raise_amount = await self.gpt_action.player_check(self.pokerGame)
+            winner = winners[0]
+            self.log(f"{winner.name} wins {pot} chips")
+            await self.send(f"{winner.name} wins **{pot} chips** and has {winner.stack} chips.")
 
-                if action == ActionType.CHECK:
-                    logger.info(f"{self.ctx.author.name} - PokerGPT Checks.")
-                    await self.ctx.send("PokerGPT __Checks.__")
-                    await self.move_to_next_betting_round()
-                    return
-                elif action == ActionType.ALL_IN:
-                    await self.pokerGPT_all_in()
-                    return
-                elif action == ActionType.RAISE:
-                    await self.pokerGPT_raise(raise_amount)
-                    return
-                else:
-                    logger.warning(f"{self.ctx.author.name} - Error move given: {action}, {raise_amount}, doing Default move of: Check")
-                    await self.ctx.send("PokerGPT __Checks.__")
-                    await self.move_to_next_betting_round()
-                    return
+        self.end_hand()
+        loser = next((player for player in game.players if player.stack == 0), None)
+        if loser is None:
+            await self.prompt_new_round()
+        else:
+            winner = game.players[1 - game.players.index(loser)]
+            await self.send(f"{winner.name} wins the game! {loser.name} is out of chips.", embeds=[self.end_game()])
 
-    def result_embed(self):
-        logger.info(f"{self.ctx.author.name} - Game Results Player Stack: {self.pokerGame.players[0].stack} chips, PokerGPT Stack: {self.pokerGame.players[1].stack} chips.")
+    def end_hand(self):
+        self.db.update_community_cards(self.game.board_str())
+        self.db.end_hand(self.user.stack, self.game.round)
+
+    # records the end of the game and returns the results embed
+    def end_game(self) -> discord.Embed:
+        self.db.end_game(self.user.stack)
+        return self.result_embed()
+
+    async def prompt_new_round(self):
+        await self.ctx.respond("Play another round?")
+        await self.send("", view=NewRoundView(self))
+
+    def result_embed(self) -> discord.Embed:
+        self.log(f"Game Results Player Stack: {self.user.stack} chips, PokerGPT Stack: {self.pokergpt.stack} chips.")
         embed = discord.Embed(title="Results")
-        embed.add_field(name="PokerGPT", value=str(self.pokerGame.players[1].stack))
-        embed.add_field(name=self.ctx.author.name, value=str(self.pokerGame.players[0].stack))
+        embed.add_field(name="PokerGPT", value=str(self.pokergpt.stack))
+        embed.add_field(name=self.ctx.author.name, value=str(self.user.stack))
         return embed
 
-    class raiseModal(discord.ui.Modal):
-        def __init__(self, pokerManager, parent_view: View):
-            super().__init__(title="Raise", timeout=pokerManager.timeout)
-            self.ctx = pokerManager.ctx
-            self.pokerGame = pokerManager.pokerGame
-            self.db_manager = pokerManager.db_manager
-            self.pokerManager = pokerManager
-            # The button view that opened this modal; it only counts as answered once a valid raise is submitted
-            self.parent_view = parent_view
 
-            self.add_item(InputText(label="Amount", value="", placeholder="Enter amount"))
+class PokerView(View):
+    """Buttons only the player who started the game can press. Answering stops the view, so its timeout never fires."""
 
-        def _lock_parent_view(self):
-            self.parent_view.responded = True
-            self.parent_view.stop()
+    def __init__(self, manager: DiscordPokerManager):
+        super().__init__(timeout=manager.timeout)
+        self.manager = manager
 
-        async def callback(self, interaction: discord.Interaction):
-            if self.parent_view.is_finished():
-                await interaction.response.send_message("Too late, this action has already timed out.", ephemeral=True)
-                return
-            amount_raised = self.children[0].value
-            if not amount_raised.isdigit():
-                await interaction.response.send_message("Please enter a valid number.")
-                return
-            amount_raised = int(amount_raised)
-            if (amount_raised == self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment):
-                self._lock_parent_view()
-                await interaction.response.edit_message(content="You are __All-in.__", view=None)
-                await self.pokerManager.user_all_in()
-                return
-            if (amount_raised > self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment):
-                await interaction.response.send_message("You do not have enough chips.")
-                return
-            if amount_raised < self.pokerGame.big_blind:
-                await interaction.response.send_message("Raise must be at least the big blind.")
-                return
-            if amount_raised < 2 * self.pokerGame.current_bet:
-                await interaction.response.send_message("You must raise to at least double the current bet.")
-                return
-            self._lock_parent_view()
-            if (amount_raised >= self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment):
-                opponent_stack = (self.pokerGame.players[1].stack + self.pokerGame.players[1].round_pot_commitment)
-                await interaction.response.edit_message(content=f"You put PokerGPT __All-in for {opponent_stack} chips.__", view=None)
-                await self.pokerManager.user_all_in()
-                return
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user is not None and interaction.user.id == self.manager.ctx.author.id
 
-            await interaction.response.edit_message(content=f"You __Raise to {amount_raised} chips.__", view=None)
-            await self.pokerManager.user_raise(amount_raised)
+    async def on_check_failure(self, interaction: discord.Interaction):
+        await interaction.response.send_message("This isn't your game.", ephemeral=True)
 
-    class callView(View):
-        def __init__(self, pokerManager):
-            super().__init__(timeout=pokerManager.timeout)
-            self.responded = False
-            self.ctx = pokerManager.ctx
-            self.pokerGame = pokerManager.pokerGame
-            self.db_manager = pokerManager.db_manager
-            self.pokerManager = pokerManager
+    # stops the view and replaces the prompt with the player's answer
+    async def answer(self, interaction: discord.Interaction, content: str, **kwargs):
+        self.stop()
+        await interaction.response.edit_message(content=content, view=None, **kwargs)
 
-        async def on_timeout(self):
-            if not self.responded:
-                if self.message:
-                    await self.message.edit(content="You took too long! You __Fold.__", view=None)
-                await self.pokerManager.user_fold()
+    # replaces the prompt once the view has timed out
+    async def expire(self, content: str, **kwargs):
+        if self.message:
+            await self.message.edit(content=content, view=None, **kwargs)
 
-        async def check(self, interaction: discord.Interaction):
-            if interaction.user and interaction.user.id == self.ctx.author.id:
-                return True
-            await interaction.response.send_message("This isn't your game.", ephemeral=True)
-            return False
+    async def open_raise_modal(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(RaiseModal(self.manager, self))
 
-        @discord.ui.button(label="Call", style=ButtonStyle.blurple)
-        async def call_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                logger.info(f"{self.ctx.author.name} - User Calls.")
-                self.responded = True
-                self.pokerGame.player_call(0)
-                await interaction.response.edit_message(content="You __Call.__", view=None)
-                await self.pokerManager.next_action()
+    async def answer_all_in(self, interaction: discord.Interaction):
+        await self.answer(interaction, f"You are __All-in for {self.manager.user.total_chips} chips.__")
+        await self.manager.user_all_in()
 
-        @discord.ui.button(label="Raise", style=ButtonStyle.green)
-        async def raise_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                await interaction.response.send_modal(self.pokerManager.raiseModal(self.pokerManager, self))
+    async def answer_fold(self, interaction: discord.Interaction):
+        await self.answer(interaction, "You __Fold.__")
+        await self.manager.user_fold()
 
-        @discord.ui.button(label="All-in", style=ButtonStyle.green)
-        async def all_in_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                self.responded = True
-                await interaction.response.edit_message(
-                    content=f"You are __All In for {self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
-                await self.pokerManager.user_all_in()
 
-        @discord.ui.button(label="Fold", style=ButtonStyle.red)
-        async def fold_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                self.responded = True
-                await interaction.response.edit_message(content="You __Fold.__", view=None)
-                await self.pokerManager.user_fold()
+class CallView(PokerView):
+    async def on_timeout(self):
+        await self.expire("You took too long! You __Fold.__")
+        await self.manager.user_fold()
 
-    class checkView(View):
-        def __init__(self, pokerManager):
-            super().__init__(timeout=pokerManager.timeout)
-            self.responded = False
-            self.ctx = pokerManager.ctx
-            self.pokerGame = pokerManager.pokerGame
-            self.db_manager = pokerManager.db_manager
-            self.pokerManager = pokerManager
+    @discord.ui.button(label="Call", style=ButtonStyle.blurple)
+    async def call_button(self, button, interaction):
+        await self.answer(interaction, "You __Call.__")
+        await self.manager.user_call()
 
-        async def on_timeout(self):
-            if not self.responded:
-                logger.info(f"{self.ctx.author.name} - User Checks.")
-                if self.message:
-                    await self.message.edit(content="You took too long! You __Check.__", view=None)
-                await self.pokerManager.next_action()
+    @discord.ui.button(label="Raise", style=ButtonStyle.green)
+    async def raise_button(self, button, interaction):
+        await self.open_raise_modal(interaction)
 
-        async def check(self, interaction: discord.Interaction):
-            if interaction.user and interaction.user.id == self.ctx.author.id:
-                return True
-            await interaction.response.send_message("This isn't your game.", ephemeral=True)
-            return False
+    @discord.ui.button(label="All-in", style=ButtonStyle.green)
+    async def all_in_button(self, button, interaction):
+        await self.answer_all_in(interaction)
 
-        @discord.ui.button(label="Check", style=ButtonStyle.blurple)
-        async def call_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                logger.info(f"{self.ctx.author.name} - User Checks.")
-                self.responded = True
-                await interaction.response.edit_message(content="You __Check.__", view=None)
-                await self.pokerManager.next_action()
+    @discord.ui.button(label="Fold", style=ButtonStyle.red)
+    async def fold_button(self, button, interaction):
+        await self.answer_fold(interaction)
 
-        @discord.ui.button(label="Raise", style=ButtonStyle.green)
-        async def raise_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                await interaction.response.send_modal(self.pokerManager.raiseModal(self.pokerManager, self))
 
-        @discord.ui.button(label="All-in", style=ButtonStyle.green)
-        async def all_in_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                self.responded = True
-                await interaction.response.edit_message(content=f"You are __All-in for {self.pokerGame.players[0].stack + self.pokerGame.players[0].round_pot_commitment} chips.__", view=None)
-                await self.pokerManager.user_all_in()
+class CheckView(PokerView):
+    async def on_timeout(self):
+        await self.expire("You took too long! You __Check.__")
+        await self.manager.user_check()
 
-    class allInCallView(View):
-        def __init__(self, pokerManager: 'DiscordPokerManager'):
-            super().__init__(timeout=pokerManager.timeout)
-            self.responded = False
-            self.ctx = pokerManager.ctx
-            self.pokerGame = pokerManager.pokerGame
-            self.db_manager = pokerManager.db_manager
-            self.pokerManager = pokerManager
+    @discord.ui.button(label="Check", style=ButtonStyle.blurple)
+    async def check_button(self, button, interaction):
+        await self.answer(interaction, "You __Check.__")
+        await self.manager.user_check()
 
-        async def on_timeout(self):
-            if self.responded == False:
-                if self.message:
-                    await self.message.edit(content="You took too long! You __Fold__.", view=None)
-                await self.pokerManager.user_fold()
+    @discord.ui.button(label="Raise", style=ButtonStyle.green)
+    async def raise_button(self, button, interaction):
+        await self.open_raise_modal(interaction)
 
-        async def check(self, interaction: discord.Interaction):
-            if interaction.user and interaction.user.id == self.ctx.author.id:
-                return True
-            await interaction.response.send_message("This isn't your game.", ephemeral=True)
-            return False
+    @discord.ui.button(label="All-in", style=ButtonStyle.green)
+    async def all_in_button(self, button, interaction):
+        await self.answer_all_in(interaction)
 
-        @discord.ui.button(label="Call All-in", style=ButtonStyle.blurple)
-        async def call_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                logger.info(f"{self.ctx.author.name} - User Calls All-in.")
-                self.responded = True
-                await interaction.response.edit_message(content="You __Call the All-in.__", view=None)
-                self.pokerGame.player_call(0)
-                await self.pokerManager.showdown()
 
-        @discord.ui.button(label="Fold", style=ButtonStyle.red)
-        async def fold_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                self.responded = True
-                await interaction.response.edit_message(content="You __Fold.__", view=None)
-                await self.pokerManager.user_fold()
+class AllInCallView(PokerView):
+    async def on_timeout(self):
+        await self.expire("You took too long! You __Fold__.")
+        await self.manager.user_fold()
 
-    class newRoundView(View):
-        def __init__(self, pokerManager: 'DiscordPokerManager'):
-            super().__init__(timeout=pokerManager.timeout)
-            self.responded = False
-            self.ctx = pokerManager.ctx
-            self.pokerGame = pokerManager.pokerGame
-            self.db_manager = pokerManager.db_manager
-            self.pokerManager = pokerManager
+    @discord.ui.button(label="Call All-in", style=ButtonStyle.blurple)
+    async def call_button(self, button, interaction):
+        await self.answer(interaction, "You __Call the All-in.__")
+        await self.manager.user_call()
 
-        async def on_timeout(self):
-            if self.responded == False:
-                self.db_manager.end_game(self.pokerGame.players[0].stack)
-                embed = self.pokerManager.result_embed()
-                if self.message:
-                    await self.message.edit(content="*Game Ended*", view=None, embeds=[embed])
+    @discord.ui.button(label="Fold", style=ButtonStyle.red)
+    async def fold_button(self, button, interaction):
+        await self.answer_fold(interaction)
 
-        async def check(self, interaction: discord.Interaction):
-            if interaction.user and interaction.user.id == self.ctx.author.id:
-                return True
-            await interaction.response.send_message("This isn't your game.", ephemeral=True)
-            return False
 
-        @discord.ui.button(label="New Round", style=ButtonStyle.blurple)
-        async def new_round_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                self.responded = True
-                await interaction.response.edit_message(content="*Starting a new round.*", view=None)
-                await self.pokerManager.play_round()
+class NewRoundView(PokerView):
+    async def on_timeout(self):
+        await self.expire("*Game Ended*", embeds=[self.manager.end_game()])
 
-        @discord.ui.button(label="End Game", style=ButtonStyle.red)
-        async def end_game_button_callback(self, button, interaction):
-            if await self.check(interaction):
-                self.responded = True
-                self.db_manager.end_game(self.pokerGame.players[0].stack)
-                embed = self.pokerManager.result_embed()
-                await interaction.response.edit_message(content="*Game Ended*", view=None, embeds=[embed])
+    @discord.ui.button(label="New Round", style=ButtonStyle.blurple)
+    async def new_round_button(self, button, interaction):
+        await self.answer(interaction, "*Starting a new round.*")
+        await self.manager.play_round()
+
+    @discord.ui.button(label="End Game", style=ButtonStyle.red)
+    async def end_game_button(self, button, interaction):
+        await self.answer(interaction, "*Game Ended*", embeds=[self.manager.end_game()])
+
+
+class RaiseModal(discord.ui.Modal):
+    def __init__(self, manager: DiscordPokerManager, parent_view: PokerView):
+        super().__init__(title="Raise", timeout=manager.timeout)
+        self.manager = manager
+        # The prompt that opened this modal; it only counts as answered once a valid raise is submitted
+        self.parent_view = parent_view
+        self.add_item(InputText(label="Amount", value="", placeholder="Enter amount"))
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.parent_view.is_finished():
+            await interaction.response.send_message("Too late, this action has already timed out.", ephemeral=True)
+            return
+
+        text = self.children[0].value
+        if not text.isdigit():
+            await interaction.response.send_message("Please enter a valid number.")
+            return
+
+        amount = int(text)
+        min_raise, max_raise = self.manager.game.raise_limits(USER)
+        if amount == max_raise:
+            await self.parent_view.answer(interaction, "You are __All-in.__")
+            await self.manager.user_all_in()
+        elif amount > max_raise:
+            await interaction.response.send_message("You do not have enough chips.")
+        elif amount < min_raise:
+            await interaction.response.send_message(f"You must raise to at least {min_raise} chips.")
+        elif amount >= self.manager.pokergpt.total_chips:
+            await self.parent_view.answer(interaction, f"You put PokerGPT __All-in for {self.manager.pokergpt.total_chips} chips.__")
+            await self.manager.user_all_in()
+        else:
+            await self.parent_view.answer(interaction, f"You __Raise to {amount} chips.__")
+            await self.manager.user_raise(amount)
