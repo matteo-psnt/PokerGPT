@@ -229,3 +229,22 @@ async def test_api_error_falls_back_to_check_when_free(mocked_player, poker_game
 
     assert action == ActionType.CHECK
     assert amount is None
+
+@pytest.mark.asyncio
+async def test_prompt_names_the_round_and_board(mocked_player, poker_game):
+    chain = mocked_player.chains[CanCheckDecision]
+    chain.ainvoke.return_value = decision(CanCheckDecision, "check", raise_amount=None)
+
+    poker_game.round = Round.PRE_FLOP
+    await mocked_player.player_check(poker_game)
+    prompt = chain.ainvoke.call_args.args[0]['input']
+    assert "It's the pre-flop round" in prompt
+    assert "There are no community cards yet." in prompt
+
+    poker_game.round = Round.FLOP
+    poker_game.board = [Card(Rank.TEN, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS), Card(Rank.QUEEN, Suit.DIAMONDS)]
+    await mocked_player.player_check(poker_game)
+    prompt = chain.ainvoke.call_args.args[0]['input']
+    assert "It's the flop round" in prompt
+    assert "The community cards are 10S, JH, QD." in prompt
+    assert prompt.endswith("What action would you take? (Check, Raise, or All-in)")

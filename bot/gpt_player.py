@@ -1,9 +1,9 @@
-from typing import ClassVar, Literal, Optional, cast
+from typing import ClassVar, Literal, Optional, cast, get_args
 from pydantic import BaseModel, Field
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from game.poker import PokerGameManager
+from game.poker import GPT, USER, PokerGameManager
 from db.db_utils import DatabaseManager
 from db.enums import ActionType
 from config.log_config import logger
@@ -61,16 +61,26 @@ class GPTPlayer:
             for schema in (FacingBetDecision, CanCheckDecision, FacingAllInDecision)
         }
 
-    async def _decide(self, formatted_text: str, schema: type[Decision], pokerGame: PokerGameManager):
+    # describes the hand to the model, adds the situation and asks for one of the schema's moves
+    async def _decide(self, schema: type[Decision], game: PokerGameManager, *situation: str):
+        me, opponent = game.players[GPT], game.players[USER]
+        *others, last = [action.capitalize() for action in get_args(schema.model_fields["action"].annotation)]
+        prompt = "\n".join([
+            f"The small blind is {game.small_blind} chips and the big blind is {game.big_blind} chips.",
+            f"You have {me.stack} chips in your stack and your opponent has {opponent.stack} chips.",
+            f"Your hand is {me.hand_long_str()}. The pot is {game.current_pot} chips.",
+            *situation,
+            f"What action would you take? ({', '.join(others)}, or {last})",
+        ])
         try:
-            decision = cast(Decision, await self.chains[schema].ainvoke({'input': formatted_text}))
+            decision = cast(Decision, await self.chains[schema].ainvoke({'input': prompt}))
         except Exception as e:
             logger.error(f"GPT request failed, defaulting to {schema.fallback.value}: {e}")
             return (schema.fallback, None)
-        return self._resolve_action(decision, pokerGame)
+        return self._resolve_action(decision, game)
 
-    def _resolve_action(self, decision: Decision, pokerGame: PokerGameManager):
-        min_raise, max_raise = pokerGame.raise_limits(1)
+    def _resolve_action(self, decision: Decision, game: PokerGameManager):
+        min_raise, max_raise = game.raise_limits(GPT)
         action = ActionType(decision.action)
 
         raise_amount = None
@@ -78,163 +88,40 @@ class GPTPlayer:
             raise_amount = max(decision.raise_amount or 0, min_raise)
             if raise_amount >= max_raise:
                 action = ActionType.ALL_IN
-                raise_amount = pokerGame.players[1].stack
+                raise_amount = game.players[GPT].stack
 
         self.db.record_gpt_action(action, raise_amount, decision.model_dump_json())
         return (action, raise_amount)
 
+    @staticmethod
+    def _board(game: PokerGameManager) -> str:
+        return f"The community cards are {game.board_str()}." if game.board else "There are no community cards yet."
 
-    async def pre_flop_small_blind(self, pokerGame: PokerGameManager):
-        # return Call, Raise, Fold or All-in
-        inputs = {
-            'small_blind': pokerGame.small_blind,
-            'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
-            'hand': pokerGame.players[1].hand_long_str(),
-            'pot': pokerGame.current_pot,
-            'amount_to_call': pokerGame.big_blind - pokerGame.small_blind
-        }
+    async def pre_flop_small_blind(self, game: PokerGameManager):
+        return await self._decide(FacingBetDecision, game,
+            "You are the small blind and it's your turn.",
+            f"It costs {game.amount_to_call(GPT)} chips to call.")
 
-        human_template = '''
-        The small blind is {small_blind} chips and the big blind is {big_blind} chips.
-        You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
-        Your hand is {hand}. The pot is {pot} chips.
-        You are the small blind and it's your turn.
-        It costs {amount_to_call} chips to call.
-        What action would you take? (Call, Raise, All-in, or Fold)
-        '''
+    async def pre_flop_big_blind(self, game: PokerGameManager):
+        return await self._decide(CanCheckDecision, game,
+            "You are the big blind and your opponent has called. It's your turn and you can check for free.")
 
-        formatted_text = human_template.format(**inputs)
-        return await self._decide(formatted_text, FacingBetDecision, pokerGame)
+    async def first_to_act(self, game: PokerGameManager):
+        return await self._decide(CanCheckDecision, game,
+            f"It's the {game.round.value} round and you're first to act. {self._board(game)}")
 
-    async def pre_flop_big_blind(self, pokerGame: PokerGameManager):
-        # return Check, Raise, or All-in
-        inputs = {
-            'small_blind': pokerGame.small_blind,
-            'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
-            'hand': pokerGame.players[1].hand_long_str(),
-            'pot': pokerGame.current_pot
-        }
+    async def player_check(self, game: PokerGameManager):
+        return await self._decide(CanCheckDecision, game,
+            f"It's the {game.round.value} round and the action checks to you. {self._board(game)}")
 
-        human_template = '''
-        The small blind is {small_blind} chips and the big blind is {big_blind} chips.
-        You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
-        Your hand is {hand}. The pot is {pot} chips.
-        You are the big blind and your opponent has called. It's your turn and you can check for free.
-        What action would you take? (Check, Raise, or All-in)
-        '''
+    async def player_raise(self, game: PokerGameManager):
+        return await self._decide(FacingBetDecision, game,
+            f"It's the {game.round.value} round. {self._board(game)}",
+            f"Your opponent has raised to {game.current_bet} chips.",
+            f"It costs {game.amount_to_call(GPT)} chips to call.")
 
-        formatted_text = human_template.format(**inputs)
-        return await self._decide(formatted_text, CanCheckDecision, pokerGame)
-    
-    async def first_to_act(self, pokerGame: PokerGameManager):
-        # return Check, Raise, or All-in
-        inputs = {
-            'small_blind': pokerGame.small_blind,
-            'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
-            'hand': pokerGame.players[1].hand_long_str(),
-            'pot': pokerGame.current_pot,
-            'round': pokerGame.round,
-            'community_cards': pokerGame.board_str()
-        }
-
-        human_template = '''
-        The small blind is {small_blind} chips and the big blind is {big_blind} chips.
-        You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
-        Your hand is {hand}. The pot is {pot} chips.
-        It's the {round} round and you're first to act. The community cards are {community_cards}.
-        What action would you take? (Check, Raise, or All-in)
-        '''
-
-        formatted_text = human_template.format(**inputs)
-        return await self._decide(formatted_text, CanCheckDecision, pokerGame)
-    
-    async def player_check(self, pokerGame: PokerGameManager):
-        # return Check, Raise, or All-in
-        inputs = {
-            'small_blind': pokerGame.small_blind,
-            'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
-            'hand': pokerGame.players[1].hand_long_str(),
-            'pot': pokerGame.current_pot,
-            'round': pokerGame.round,
-            'community_cards': pokerGame.board_str()
-        }
-
-        human_template = """
-        The small blind is {small_blind} chips and the big blind is {big_blind} chips.
-        You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
-        Your hand is {hand}. The pot is {pot} chips.
-        It is the {round} round and the action checks to you. The community cards are {community_cards}.
-        Based on this information, what action would you like to take? (Check, Raise, or All-in).
-        """        
-        
-        formatted_text = human_template.format(**inputs)
-
-        return await self._decide(formatted_text, CanCheckDecision, pokerGame)
-    
-    async def player_raise(self, pokerGame: PokerGameManager):
-        # return Call, Raise, All-in, or Fold
-        inputs = {
-            'small_blind': pokerGame.small_blind,
-            'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'opponents_stack': pokerGame.players[0].stack,
-            'hand': pokerGame.players[1].hand_long_str(),
-            'pot': pokerGame.current_pot,
-            'round': pokerGame.round,
-            'community_cards': pokerGame.board_str(),
-            'opponent_raise': pokerGame.current_bet,
-            'amount_to_call': pokerGame.current_bet - pokerGame.players[1].round_pot_commitment
-        }
-
-        human_template = '''
-        The small blind is {small_blind} chips and the big blind is {big_blind} chips.
-        You have {stack} chips in your stack and your opponent has {opponents_stack} chips.
-        Your hand is {hand}. The pot is {pot} chips.
-        It's the {round} round. The community cards are {community_cards}.
-        Your opponent has raised to {opponent_raise} chips.
-        It costs {amount_to_call} chips to call.
-        What action would you take? (Call, Raise, All-in, or Fold)
-        '''
-
-        formatted_text = human_template.format(**inputs)
-
-        return await self._decide(formatted_text, FacingBetDecision, pokerGame)
-
-    async def player_all_in(self, pokerGame: PokerGameManager):
-        # return Call, or Fold
-        amount_to_call = pokerGame.current_bet - pokerGame.players[1].round_pot_commitment
-        if amount_to_call > pokerGame.players[1].stack:
-            amount_to_call = pokerGame.players[1].stack
-        inputs = {
-            'small_blind': pokerGame.small_blind,
-            'big_blind': pokerGame.big_blind,
-            'stack': pokerGame.players[1].stack,
-            'hand': pokerGame.players[1].hand_long_str(),
-            'pot': pokerGame.current_pot,
-            'round': pokerGame.round,
-            'community_cards': pokerGame.board_str(),
-            'opponent_raise': pokerGame.current_bet,
-            'amount_to_call': amount_to_call
-        }
-
-        human_template = '''
-        The small blind is {small_blind} chips and the big blind is {big_blind} chips.
-        You have {stack} chips in your stack.
-        Your hand is {hand}. The pot is {pot} chips.
-        It's the {round} round. The community cards are {community_cards}.
-        Your opponent has gone all in for {opponent_raise} chips.
-        It costs {amount_to_call} chips to call.
-        What action would you take? (Call, or Fold)
-        '''
-
-        formatted_text = human_template.format(**inputs)
-        
-        return await self._decide(formatted_text, FacingAllInDecision, pokerGame)
+    async def player_all_in(self, game: PokerGameManager):
+        return await self._decide(FacingAllInDecision, game,
+            f"It's the {game.round.value} round. {self._board(game)}",
+            f"Your opponent has gone all in for {game.current_bet} chips.",
+            f"It costs {min(game.amount_to_call(GPT), game.players[GPT].stack)} chips to call.")

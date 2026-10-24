@@ -50,7 +50,8 @@ class PokerGameManager(Dealer):
         self.starting_stack = buy_in
         self.small_blind = small_blind
         self.big_blind = big_blind
-        self.button = 0
+        # new_round passes the button to the user for the first hand
+        self.button = GPT
         self.round = Round.PRE_FLOP
         self.current_pot = 0
         self.current_bet = 0

@@ -38,11 +38,11 @@ suit_bottoms = {
     Suit.CLUBS: "<:club_bottom:1128172982469148703>"
 }
 
-'''
+r'''
 To view the unique identifiers of the custom cards in Discord, 
 you can use the following commands in the server chat:
 
-Red Card Bottoms:
+Red Card Tops:
 
 \:red_A_top:
 \:red_2_top:
@@ -59,7 +59,7 @@ Red Card Bottoms:
 \:red_K_top:
 
 
-Black  Card Bottoms:
+Black Card Tops:
 
 \:black_A_top:
 \:black_2_top:
@@ -75,7 +75,7 @@ Black  Card Bottoms:
 \:black_Q_top:
 \:black_K_top:
 
-Suit Card Tops:
+Suit Card Bottoms:
 
 \:spade_bottom:
 \:heart_bottom:
@@ -87,20 +87,12 @@ the respective custom cards will be displayed,
 and their unique identifiers will be shown in the message input field.
 '''
 
-def get_cards(input_list: list[Card], small_cards: bool = False):   
-    top_row = []
-    bottom_row = []
-    for card in input_list:
-        if card.suit == Suit.SPADES or card.suit == Suit.CLUBS:
-            top_row.append(black_card_rank_tops[card.rank])
-        else:
-            top_row.append(red_card_rank_tops[card.rank])
-        bottom_row.append(suit_bottoms[card.suit])
-    
-    if small_cards:
-        top_row = ["__"] + top_row + ["__"]
-        bottom_row = ["__"] + bottom_row + ["__"]
+def get_cards(cards: list[Card], small_cards: bool = False):
+    top_row = [(black_card_rank_tops if card.suit in (Suit.SPADES, Suit.CLUBS) else red_card_rank_tops)[card.rank] for card in cards]
+    bottom_row = [suit_bottoms[card.suit] for card in cards]
 
-    
-    #join rows together with a new line
+    if small_cards:
+        top_row = ["__", *top_row, "__"]
+        bottom_row = ["__", *bottom_row, "__"]
+
     return "\n".join(["".join(top_row), "".join(bottom_row)])

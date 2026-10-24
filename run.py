@@ -102,7 +102,6 @@ async def play_poker(
     poker = PokerGameManager(buy_in, small_blind, big_blind)
     poker.players[0].name = ctx.author.name
     poker.players[1].name = "PokerGPT"
-    poker.new_round()
 
     session = Session()
     

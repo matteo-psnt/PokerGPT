@@ -9,7 +9,7 @@ def test_initialization():
     assert game.starting_stack == 1500
     assert game.small_blind == 10
     assert game.big_blind == 20
-    assert game.button == 0
+    assert game.button == 1
     assert game.round == Round.PRE_FLOP
     assert game.current_pot == 0
     assert game.current_bet == 0
@@ -35,7 +35,7 @@ def test_new_round():
     # Check reset state
     assert game.current_pot == 0
     assert game.current_bet == 0
-    assert game.button == 1  # Button should move to next player
+    assert game.button == 1  # Button should move to the other player
     assert game.round == Round.PRE_FLOP
     
     # Players' hands should be reset
