@@ -262,7 +262,7 @@ class PokerGameManager(Dealer):
     def return_min_max_raise(self, player: int):
         # Same rules the user's raise modal enforces: at least double the bet and at least the big blind
         min_raise = max(self.current_bet * 2, self.big_blind)
-        max_raise = self.players[1].stack + self.players[1].round_pot_commitment
+        max_raise = self.players[player].stack + self.players[player].round_pot_commitment
         return (min_raise, max_raise)
 
     def new_round(self):

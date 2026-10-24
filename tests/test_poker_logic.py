@@ -97,17 +97,19 @@ def test_all_in_raise():
     # Current bet should be raised to the all-in amount
     assert game.current_bet == 60
 
-@pytest.mark.parametrize("opp_stack,expected_max", [
-    (1000, 1000),    # equal stacks
-    (400,  400),     # opponent shorter
+@pytest.mark.parametrize("player,other", [
+    (0, 1),
+    (1, 0),
 ])
-def test_return_min_max_raise(opp_stack, expected_max):
+def test_return_min_max_raise(player, other):
     game = PokerGameManager()
     game.current_bet = 50
-    game.players[1].stack = opp_stack
-    min_raise, max_raise = game.return_min_max_raise(0)
+    game.players[player].stack = 400
+    game.players[player].round_pot_commitment = 20
+    game.players[other].stack = 1000
+    min_raise, max_raise = game.return_min_max_raise(player)
     assert min_raise == 100                       # 50 * 2
-    assert max_raise == expected_max + game.players[1].round_pot_commitment
+    assert max_raise == 420                       # the raising player's own stack + commitment
 
 def test_player_all_in_call_refund():
     game = PokerGameManager()
